@@ -1,0 +1,15 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head><title>Kết quả giao dịch</title></head>
+<body>
+<h2>Kết quả giao dịch</h2>
+<ul>
+    <li th:each="entry : ${params.entrySet()}">
+        <b th:text="${entry.key}"></b>: <span th:text="${entry.value}"></span>
+    </li>
+</ul>
+<form method="get" action="gmail/login">
+    <button type="submit">Log in Google</button>
+</form>
+</body>
+</html>

@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+  <title>Invoice</title>
+</head>
+<body>
+<h1>Hóa đơn cần thanh toán</h1>
+<form method="post" action="/api/pay">
+  <label>Số tiền:</label>
+  <input type="text" name="amount" placeholder="10000" required><br>
+  <label>Mã đơn hàng:</label>
+  <input type="text" name="orderId" placeholder="123456" required><br>
+  <label>Thông tin:</label>
+  <input type="text" name="orderInfo" placeholder="Thanh toán hóa đơn test"><br>
+  <button type="submit">Thanh toán VNPay</button>
+</form>
+</body>
+</html>
