@@ -17,7 +17,6 @@ public interface OperationService {
     
     // ADD THESE NEW METHODS
     List<Operation> findAllOrderByTimestamp();
-    Page<Operation> findOperationsWithFilters(String search, String operationType, 
-                                             int page, int size);
+    Page<Operation> findOperationsWithFilters(String search, String operationType, int page, int size);
     List<Operation> findByProductId(Long productId);
 }

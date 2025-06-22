@@ -106,8 +106,8 @@ const ProductManagementPage: React.FC = () => {
     rushOrderEligible: true,
     genre: "",
     value: "",
-    warehouseEntryDate: "",
-    mediaType: "BOOK",
+    warehouseEntryDate: new Date().toISOString().split('T')[0],
+    mediaType: "",
     // Book fields
     author: "",
     coverType: undefined,
@@ -140,16 +140,13 @@ const ProductManagementPage: React.FC = () => {
 
       let response;
       if (searchTerm.trim()) {
-        // If search term is provided, use search endpoint
         response = await productService.searchProducts({
           search: searchTerm,
           page: page - 1,
           limit: 10,
         });
       } else {
-        // Otherwise, get all products
         response = await productService.getAllProducts();
-        // For pagination, we'll slice the results
         const startIndex = (page - 1) * 10;
         const endIndex = startIndex + 10;
         const paginatedData = response.data.slice(startIndex, endIndex);
@@ -171,18 +168,15 @@ const ProductManagementPage: React.FC = () => {
     }
   };
 
-  // Handle page change
   const handlePageChange = (_: React.ChangeEvent<unknown>, value: number) => {
     setPage(value);
   };
 
-  // Handle search
   const handleSearch = () => {
     setPage(1);
     fetchProducts();
   };
 
-  // Open dialog to add a new product
   const handleAddProduct = () => {
     setDialogTitle("Add New Product");
     setSelectedProduct(null);
@@ -190,12 +184,10 @@ const ProductManagementPage: React.FC = () => {
     setOpenProductDialog(true);
   };
 
-  // Open dialog to edit a product
   const handleEditProduct = (product: Product) => {
     setDialogTitle("Edit Product");
     setSelectedProduct(product);
 
-    // Populate form with product data
     setFormData({
       title: product.title,
       productDescription: product.productDescription || "",
@@ -234,7 +226,6 @@ const ProductManagementPage: React.FC = () => {
     setOpenProductDialog(true);
   };
 
-  // Delete a product
   const handleDeleteProduct = async (id: string) => {
     const confirmed = window.confirm(
       "Are you sure you want to delete this product? This action cannot be undone."
@@ -258,7 +249,6 @@ const ProductManagementPage: React.FC = () => {
     }
   };
 
-  // Handle product selection
   const handleSelectProduct = (productId: string, checked: boolean) => {
     if (checked) {
       setSelectedProducts([...selectedProducts, productId]);
@@ -267,7 +257,6 @@ const ProductManagementPage: React.FC = () => {
     }
   };
 
-  // Handle select all
   const handleSelectAll = (event: React.ChangeEvent<HTMLInputElement>) => {
     if (event.target.checked) {
       setSelectedProducts(products.map(product => product.id.toString()));
@@ -276,7 +265,6 @@ const ProductManagementPage: React.FC = () => {
     }
   };
 
-  // Handle bulk delete
   const handleBulkDelete = async () => {
     if (selectedProducts.length === 0) return;
     
@@ -297,7 +285,7 @@ const ProductManagementPage: React.FC = () => {
       await productService.deleteBulkProducts(selectedProducts);
       toast.success(`Successfully deleted ${selectedProducts.length} products`);
       setSelectedProducts([]);
-      fetchProducts(); // Refresh the list
+      fetchProducts();
     } catch (err: any) {
       console.error("Failed to delete products:", err);
       if (err.response?.status === 400) {
@@ -312,7 +300,6 @@ const ProductManagementPage: React.FC = () => {
     }
   };
 
-  // Save or update product
   const handleSaveProduct = async () => {
     try {
       setSaving(true);
@@ -345,7 +332,6 @@ const ProductManagementPage: React.FC = () => {
       if (err.response?.status === 400) {
         const errorMessage = err.response.data.message || err.response.data.error || "Validation failed";
         
-        // Parse validation errors for specific fields
         if (errorMessage.includes("author")) {
           setErrors(prev => ({ ...prev, author: "Author is required for books" }));
         }
@@ -378,7 +364,6 @@ const ProductManagementPage: React.FC = () => {
     }
   };
 
-  // Reset form
   const resetForm = () => {
     setFormData({
       title: "",
@@ -393,8 +378,8 @@ const ProductManagementPage: React.FC = () => {
       rushOrderEligible: true,
       genre: "",
       value: "",
-      warehouseEntryDate: "",
-      mediaType: "BOOK",
+      warehouseEntryDate: new Date().toISOString().split('T')[0],
+      mediaType: "",
       // Book fields
       author: "",
       coverType: undefined,
@@ -418,12 +403,278 @@ const ProductManagementPage: React.FC = () => {
     setErrors({});
   };
 
-  // Format price for display
   const formatPrice = (price: number) => {
     return new Intl.NumberFormat("vi-VN", {
       style: "currency",
       currency: "VND",
     }).format(price);
+  };
+
+  // Get media type label for section header
+  const getMediaTypeLabel = (mediaType: string) => {
+    const labels: Record<string, string> = {
+      'BOOK': 'Book',
+      'CD': 'CD',
+      'LP': 'LP Record', 
+      'DVD': 'DVD'
+    };
+    return labels[mediaType] || mediaType;
+  };
+
+  // Render media-specific fields based on selected type
+  const renderMediaSpecificFields = () => {
+    switch (formData.mediaType) {
+      case 'BOOK':
+        return (
+          <Box>
+            <Typography variant="subtitle2" gutterBottom sx={{ mb: 2, fontWeight: 'bold' }}>
+              Required Book Information:
+            </Typography>
+            
+            {/* Author */}
+            <TextField
+              fullWidth
+              label="Author *"
+              value={formData.author || ''}
+              onChange={(e) => setFormData({ ...formData, author: e.target.value })}
+              margin="normal"
+              required
+              error={!!errors.author}
+              helperText={errors.author}
+              placeholder="Full name of the author"
+            />
+
+            {/* Cover Type and Publisher - Side by side */}
+            <Box sx={{ display: 'flex', gap: 2, mt: 2 }}>
+              <FormControl fullWidth required error={!!errors.coverType}>
+                <InputLabel>Cover Type *</InputLabel>
+                <Select
+                  value={formData.coverType || ''}
+                  onChange={(e) => setFormData({ ...formData, coverType: e.target.value as CoverType })}
+                  label="Cover Type *"
+                >
+                  <MenuItem value="PAPERBACK">Paperback</MenuItem>
+                  <MenuItem value="HARDCOVER">Hardcover</MenuItem>
+                </Select>
+                {errors.coverType && <FormHelperText>{errors.coverType}</FormHelperText>}
+              </FormControl>
+
+              <TextField
+                fullWidth
+                label="Publisher *"
+                value={formData.publisher || ''}
+                onChange={(e) => setFormData({ ...formData, publisher: e.target.value })}
+                required
+                error={!!errors.publisher}
+                helperText={errors.publisher}
+                placeholder="Publishing company"
+              />
+            </Box>
+
+            {/* Publication Date and Pages - Side by side */}
+            <Box sx={{ display: 'flex', gap: 2, mt: 2 }}>
+              <TextField
+                fullWidth
+                label="Publication Date *"
+                type="date"
+                value={formData.publicationDate || ''}
+                onChange={(e) => setFormData({ ...formData, publicationDate: e.target.value })}
+                required
+                InputLabelProps={{ shrink: true }}
+                error={!!errors.publicationDate}
+                helperText={errors.publicationDate}
+              />
+
+              <TextField
+                fullWidth
+                label="Number of Pages *"
+                type="number"
+                value={formData.numberOfPage || ''}
+                onChange={(e) => setFormData({ ...formData, numberOfPage: e.target.value })}
+                required
+                error={!!errors.numberOfPage}
+                helperText={errors.numberOfPage}
+                InputProps={{ inputProps: { min: 1 } }}
+              />
+            </Box>
+
+            {/* Language */}
+            <TextField
+              fullWidth
+              label="Language *"
+              value={formData.language || ''}
+              onChange={(e) => setFormData({ ...formData, language: e.target.value })}
+              margin="normal"
+              required
+              error={!!errors.language}
+              helperText={errors.language}
+              placeholder="e.g., English, Vietnamese, Spanish"
+            />
+          </Box>
+        );
+
+      case 'CD':
+      case 'LP':
+        return (
+          <Box>
+            <Typography variant="subtitle2" gutterBottom sx={{ mb: 2, fontWeight: 'bold' }}>
+              Required {formData.mediaType} Information:
+            </Typography>
+
+            {/* Artist */}
+            <TextField
+              fullWidth
+              label="Artist/Band *"
+              value={formData.artist || ''}
+              onChange={(e) => setFormData({ ...formData, artist: e.target.value })}
+              margin="normal"
+              required
+              error={!!errors.artist}
+              helperText={errors.artist}
+              placeholder="Name of the artist or band"
+            />
+
+            {/* Album and Record Label - Side by side */}
+            <Box sx={{ display: 'flex', gap: 2, mt: 2 }}>
+              <TextField
+                fullWidth
+                label="Album Name *"
+                value={formData.album || ''}
+                onChange={(e) => setFormData({ ...formData, album: e.target.value })}
+                required
+                error={!!errors.album}
+                helperText={errors.album}
+                placeholder="Name of the album"
+              />
+
+              <TextField
+                fullWidth
+                label="Record Label *"
+                value={formData.recordLabel || ''}
+                onChange={(e) => setFormData({ ...formData, recordLabel: e.target.value })}
+                required
+                error={!!errors.recordLabel}
+                helperText={errors.recordLabel}
+                placeholder="e.g., Sony Music, Universal"
+              />
+            </Box>
+
+            {/* Tracklist */}
+            <TextField
+              fullWidth
+              label="Tracklist *"
+              value={formData.tracklist || ''}
+              onChange={(e) => setFormData({ ...formData, tracklist: e.target.value })}
+              margin="normal"
+              multiline
+              rows={4}
+              required
+              error={!!errors.tracklist}
+              helperText={errors.tracklist}
+              placeholder="List all tracks, one per line&#10;1. Track Name One&#10;2. Track Name Two&#10;3. Track Name Three"
+            />
+
+            {/* Release Date */}
+            <TextField
+              fullWidth
+              label="Release Date"
+              type="date"
+              value={formData.releaseDate || ''}
+              onChange={(e) => setFormData({ ...formData, releaseDate: e.target.value })}
+              margin="normal"
+              InputLabelProps={{ shrink: true }}
+            />
+          </Box>
+        );
+
+      case 'DVD':
+        return (
+          <Box>
+            <Typography variant="subtitle2" gutterBottom sx={{ mb: 2, fontWeight: 'bold' }}>
+              Required DVD Information:
+            </Typography>
+
+            {/* Director */}
+            <TextField
+              fullWidth
+              label="Director *"
+              value={formData.director || ''}
+              onChange={(e) => setFormData({ ...formData, director: e.target.value })}
+              margin="normal"
+              required
+              error={!!errors.director}
+              helperText={errors.director}
+              placeholder="Name of the director"
+            />
+
+            {/* Studio and Runtime - Side by side */}
+            <Box sx={{ display: 'flex', gap: 2, mt: 2 }}>
+              <TextField
+                fullWidth
+                label="Studio *"
+                value={formData.studio || ''}
+                onChange={(e) => setFormData({ ...formData, studio: e.target.value })}
+                required
+                error={!!errors.studio}
+                helperText={errors.studio}
+                placeholder="e.g., Warner Bros, Disney"
+              />
+
+              <TextField
+                fullWidth
+                label="Runtime *"
+                value={formData.runtime || ''}
+                onChange={(e) => setFormData({ ...formData, runtime: e.target.value })}
+                required
+                error={!!errors.runtime}
+                helperText={errors.runtime}
+                placeholder="e.g., 2h 30m, 150 minutes"
+              />
+            </Box>
+
+            {/* Disc Type and Language - Side by side */}
+            <Box sx={{ display: 'flex', gap: 2, mt: 2 }}>
+              <FormControl fullWidth required error={!!errors.discType}>
+                <InputLabel>Disc Type *</InputLabel>
+                <Select
+                  value={formData.discType || ''}
+                  onChange={(e) => setFormData({ ...formData, discType: e.target.value as DiscType })}
+                  label="Disc Type *"
+                >
+                  <MenuItem value="DVD">DVD</MenuItem>
+                  <MenuItem value="BLURAY">Blu-ray</MenuItem>
+                  <MenuItem value="HDDVD">HD-DVD</MenuItem>
+                </Select>
+                {errors.discType && <FormHelperText>{errors.discType}</FormHelperText>}
+              </FormControl>
+
+              <TextField
+                fullWidth
+                label="Language *"
+                value={formData.language || ''}
+                onChange={(e) => setFormData({ ...formData, language: e.target.value })}
+                required
+                error={!!errors.language}
+                helperText={errors.language}
+                placeholder="e.g., English, Vietnamese"
+              />
+            </Box>
+
+            {/* Subtitles */}
+            <TextField
+              fullWidth
+              label="Subtitles"
+              value={formData.subtitle || ''}
+              onChange={(e) => setFormData({ ...formData, subtitle: e.target.value })}
+              margin="normal"
+              placeholder="e.g., English, Spanish, French, Vietnamese"
+            />
+          </Box>
+        );
+
+      default:
+        return null;
+    }
   };
 
   if (loading) {
@@ -578,30 +829,23 @@ const ProductManagementPage: React.FC = () => {
         <DialogTitle>{dialogTitle}</DialogTitle>
         <DialogContent>
           <Box sx={{ pt: 1 }}>
-            {/* Basic Product Information */}
+            {/* ========== SECTION 1: BASIC PRODUCT INFORMATION ========== */}
+            <Typography variant="h6" gutterBottom sx={{ mt: 2, mb: 3, color: 'primary.main' }}>
+              📋 Basic Product Information
+            </Typography>
+
+            {/* Title */}
             <TextField
               fullWidth
-              label="Title *"
+              label="Product Title *"
               value={formData.title}
               onChange={(e) => setFormData({ ...formData, title: e.target.value })}
               margin="normal"
               required
+              placeholder="Enter the product title"
             />
 
-            <FormControl fullWidth margin="normal" required>
-              <InputLabel>Media Type *</InputLabel>
-              <Select
-                value={formData.mediaType}
-                onChange={(e) => setFormData({ ...formData, mediaType: e.target.value })}
-                label="Media Type *"
-              >
-                <MenuItem value="BOOK">Book</MenuItem>
-                <MenuItem value="CD">CD</MenuItem>
-                <MenuItem value="LP">LP</MenuItem>
-                <MenuItem value="DVD">DVD</MenuItem>
-              </Select>
-            </FormControl>
-
+            {/* Category */}
             <TextField
               fullWidth
               label="Category *"
@@ -609,47 +853,60 @@ const ProductManagementPage: React.FC = () => {
               onChange={(e) => setFormData({ ...formData, category: e.target.value })}
               margin="normal"
               required
+              placeholder="e.g., Education, Entertainment, Technology"
             />
 
-            <TextField
-              fullWidth
-              label="Value *"
-              type="number"
-              value={formData.value}
-              onChange={(e) => setFormData({ ...formData, value: e.target.value })}
-              margin="normal"
-              required
-            />
+            {/* Price Fields - Side by side */}
+            <Box sx={{ display: 'flex', gap: 2, mt: 2 }}>
+              <TextField
+                fullWidth
+                label="Value (Cost Price) *"
+                type="number"
+                value={formData.value}
+                onChange={(e) => setFormData({ ...formData, value: e.target.value })}
+                required
+                placeholder="Original cost price"
+                InputProps={{
+                  startAdornment: <span style={{ marginRight: '8px' }}>₫</span>,
+                }}
+              />
+              <TextField
+                fullWidth
+                label="Current Price (Selling Price) *"
+                type="number"
+                value={formData.currentPrice}
+                onChange={(e) => setFormData({ ...formData, currentPrice: e.target.value })}
+                required
+                placeholder="Selling price (excl. VAT)"
+                InputProps={{
+                  startAdornment: <span style={{ marginRight: '8px' }}>₫</span>,
+                }}
+              />
+            </Box>
 
-            <TextField
-              fullWidth
-              label="Current Price *"
-              type="number"
-              value={formData.currentPrice}
-              onChange={(e) => setFormData({ ...formData, currentPrice: e.target.value })}
-              margin="normal"
-              required
-            />
+            {/* Quantity and Barcode - Side by side */}
+            <Box sx={{ display: 'flex', gap: 2, mt: 2 }}>
+              <TextField
+                fullWidth
+                label="Quantity *"
+                type="number"
+                value={formData.quantity}
+                onChange={(e) => setFormData({ ...formData, quantity: e.target.value })}
+                required
+                placeholder="Available stock"
+                InputProps={{ inputProps: { min: 0 } }}
+              />
+              <TextField
+                fullWidth
+                label="Barcode *"
+                value={formData.barcode}
+                onChange={(e) => setFormData({ ...formData, barcode: e.target.value })}
+                required
+                placeholder="Product barcode/SKU"
+              />
+            </Box>
 
-            <TextField
-              fullWidth
-              label="Quantity *"
-              type="number"
-              value={formData.quantity}
-              onChange={(e) => setFormData({ ...formData, quantity: e.target.value })}
-              margin="normal"
-              required
-            />
-
-            <TextField
-              fullWidth
-              label="Barcode *"
-              value={formData.barcode}
-              onChange={(e) => setFormData({ ...formData, barcode: e.target.value })}
-              margin="normal"
-              required
-            />
-
+            {/* Product Description */}
             <TextField
               fullWidth
               label="Product Description"
@@ -658,27 +915,32 @@ const ProductManagementPage: React.FC = () => {
               margin="normal"
               multiline
               rows={3}
+              placeholder="Detailed description of the product..."
             />
 
-            <TextField
-              fullWidth
-              label="Product Dimensions *"
-              value={formData.productDimensions}
-              onChange={(e) => setFormData({ ...formData, productDimensions: e.target.value })}
-              margin="normal"
-              required
-            />
+            {/* Physical Properties - Side by side */}
+            <Box sx={{ display: 'flex', gap: 2, mt: 2 }}>
+              <TextField
+                fullWidth
+                label="Dimensions *"
+                value={formData.productDimensions}
+                onChange={(e) => setFormData({ ...formData, productDimensions: e.target.value })}
+                required
+                placeholder="e.g., 25cm x 18cm x 2cm"
+              />
+              <TextField
+                fullWidth
+                label="Weight (kg) *"
+                type="number"
+                value={formData.weight}
+                onChange={(e) => setFormData({ ...formData, weight: e.target.value })}
+                required
+                placeholder="Weight in kilograms"
+                InputProps={{ inputProps: { min: 0, step: 0.1 } }}
+              />
+            </Box>
 
-            <TextField
-              fullWidth
-              label="Weight *"
-              type="number"
-              value={formData.weight}
-              onChange={(e) => setFormData({ ...formData, weight: e.target.value })}
-              margin="normal"
-              required
-            />
-
+            {/* Image URL */}
             <TextField
               fullWidth
               label="Image URL *"
@@ -686,218 +948,56 @@ const ProductManagementPage: React.FC = () => {
               onChange={(e) => setFormData({ ...formData, imageURL: e.target.value })}
               margin="normal"
               required
+              placeholder="https://example.com/product-image.jpg"
             />
 
-            <TextField
-              fullWidth
-              label="Warehouse Entry Date *"
-              type="date"
-              value={formData.warehouseEntryDate}
-              onChange={(e) => setFormData({ ...formData, warehouseEntryDate: e.target.value })}
-              margin="normal"
-              required
-              InputLabelProps={{ shrink: true }}
-            />
+            {/* Warehouse Entry Date and Genre - Side by side */}
+            <Box sx={{ display: 'flex', gap: 2, mt: 2 }}>
+              <TextField
+                fullWidth
+                label="Warehouse Entry Date *"
+                type="date"
+                value={formData.warehouseEntryDate}
+                onChange={(e) => setFormData({ ...formData, warehouseEntryDate: e.target.value })}
+                required
+                InputLabelProps={{ shrink: true }}
+              />
+              <TextField
+                fullWidth
+                label="Genre"
+                value={formData.genre}
+                onChange={(e) => setFormData({ ...formData, genre: e.target.value })}
+                placeholder="Optional genre classification"
+              />
+            </Box>
 
-            <TextField
-              fullWidth
-              label="Genre"
-              value={formData.genre}
-              onChange={(e) => setFormData({ ...formData, genre: e.target.value })}
-              margin="normal"
-            />
+            {/* ========== SECTION 2: MEDIA TYPE SELECTION ========== */}
+            <Typography variant="h6" gutterBottom sx={{ mt: 4, mb: 3, color: 'primary.main' }}>
+              🎯 Media Type Selection
+            </Typography>
 
-            {/* Media-Specific Fields */}
-            {formData.mediaType === 'BOOK' && (
+            <FormControl fullWidth margin="normal" required>
+              <InputLabel>Media Type *</InputLabel>
+              <Select
+                value={formData.mediaType}
+                onChange={(e) => setFormData({ ...formData, mediaType: e.target.value })}
+                label="Media Type *"
+              >
+                <MenuItem value="BOOK">📚 Book</MenuItem>
+                <MenuItem value="CD">💿 CD</MenuItem>
+                <MenuItem value="LP">🎵 LP Record</MenuItem>
+                <MenuItem value="DVD">📀 DVD</MenuItem>
+              </Select>
+            </FormControl>
+
+            {/* ========== SECTION 3: PRODUCT-SPECIFIC DETAILS ========== */}
+            {formData.mediaType && (
               <>
-                <TextField
-                  fullWidth
-                  label="Author *"
-                  value={formData.author || ''}
-                  onChange={(e) => setFormData({ ...formData, author: e.target.value })}
-                  margin="normal"
-                  required
-                  error={!!errors.author}
-                  helperText={errors.author}
-                />
-                <FormControl fullWidth margin="normal" required error={!!errors.coverType}>
-                  <InputLabel>Cover Type *</InputLabel>
-                  <Select
-                    value={formData.coverType || ''}
-                    onChange={(e) => setFormData({ ...formData, coverType: e.target.value as CoverType })}
-                    label="Cover Type *"
-                  >
-                    <MenuItem value="PAPERBACK">Paperback</MenuItem>
-                    <MenuItem value="HARDCOVER">Hardcover</MenuItem>
-                  </Select>
-                  {errors.coverType && <FormHelperText>{errors.coverType}</FormHelperText>}
-                </FormControl>
-                <TextField
-                  fullWidth
-                  label="Publisher *"
-                  value={formData.publisher || ''}
-                  onChange={(e) => setFormData({ ...formData, publisher: e.target.value })}
-                  margin="normal"
-                  required
-                  error={!!errors.publisher}
-                  helperText={errors.publisher}
-                />
-                <TextField
-                  fullWidth
-                  label="Publication Date *"
-                  type="date"
-                  value={formData.publicationDate || ''}
-                  onChange={(e) => setFormData({ ...formData, publicationDate: e.target.value })}
-                  margin="normal"
-                  required
-                  InputLabelProps={{ shrink: true }}
-                  error={!!errors.publicationDate}
-                  helperText={errors.publicationDate}
-                />
-                <TextField
-                  fullWidth
-                  label="Number of Pages *"
-                  type="number"
-                  value={formData.numberOfPage || ''}
-                  onChange={(e) => setFormData({ ...formData, numberOfPage: e.target.value })}
-                  margin="normal"
-                  required
-                  error={!!errors.numberOfPage}
-                  helperText={errors.numberOfPage}
-                />
-                <TextField
-                  fullWidth
-                  label="Language *"
-                  value={formData.language || ''}
-                  onChange={(e) => setFormData({ ...formData, language: e.target.value })}
-                  margin="normal"
-                  required
-                  error={!!errors.language}
-                  helperText={errors.language}
-                />
-              </>
-            )}
+                <Typography variant="h6" gutterBottom sx={{ mt: 4, mb: 3, color: 'primary.main' }}>
+                  🔍 {getMediaTypeLabel(formData.mediaType)} Specific Details
+                </Typography>
 
-            {(formData.mediaType === 'CD' || formData.mediaType === 'LP') && (
-              <>
-                <TextField
-                  fullWidth
-                  label="Artist *"
-                  value={formData.artist || ''}
-                  onChange={(e) => setFormData({ ...formData, artist: e.target.value })}
-                  margin="normal"
-                  required
-                  error={!!errors.artist}
-                  helperText={errors.artist}
-                />
-                <TextField
-                  fullWidth
-                  label="Album *"
-                  value={formData.album || ''}
-                  onChange={(e) => setFormData({ ...formData, album: e.target.value })}
-                  margin="normal"
-                  required
-                  error={!!errors.album}
-                  helperText={errors.album}
-                />
-                <TextField
-                  fullWidth
-                  label="Record Label *"
-                  value={formData.recordLabel || ''}
-                  onChange={(e) => setFormData({ ...formData, recordLabel: e.target.value })}
-                  margin="normal"
-                  required
-                  error={!!errors.recordLabel}
-                  helperText={errors.recordLabel}
-                />
-                <TextField
-                  fullWidth
-                  label="Tracklist *"
-                  value={formData.tracklist || ''}
-                  onChange={(e) => setFormData({ ...formData, tracklist: e.target.value })}
-                  margin="normal"
-                  multiline
-                  rows={3}
-                  required
-                  error={!!errors.tracklist}
-                  helperText={errors.tracklist}
-                />
-                <TextField
-                  fullWidth
-                  label="Release Date"
-                  type="date"
-                  value={formData.releaseDate || ''}
-                  onChange={(e) => setFormData({ ...formData, releaseDate: e.target.value })}
-                  margin="normal"
-                  InputLabelProps={{ shrink: true }}
-                />
-              </>
-            )}
-
-            {formData.mediaType === 'DVD' && (
-              <>
-                <TextField
-                  fullWidth
-                  label="Director *"
-                  value={formData.director || ''}
-                  onChange={(e) => setFormData({ ...formData, director: e.target.value })}
-                  margin="normal"
-                  required
-                  error={!!errors.director}
-                  helperText={errors.director}
-                />
-                <TextField
-                  fullWidth
-                  label="Studio *"
-                  value={formData.studio || ''}
-                  onChange={(e) => setFormData({ ...formData, studio: e.target.value })}
-                  margin="normal"
-                  required
-                  error={!!errors.studio}
-                  helperText={errors.studio}
-                />
-                <TextField
-                  fullWidth
-                  label="Runtime *"
-                  value={formData.runtime || ''}
-                  onChange={(e) => setFormData({ ...formData, runtime: e.target.value })}
-                  margin="normal"
-                  required
-                  placeholder="e.g., 2h 30m"
-                  error={!!errors.runtime}
-                  helperText={errors.runtime}
-                />
-                <FormControl fullWidth margin="normal" required error={!!errors.discType}>
-                  <InputLabel>Disc Type *</InputLabel>
-                  <Select
-                    value={formData.discType || ''}
-                    onChange={(e) => setFormData({ ...formData, discType: e.target.value as DiscType })}
-                    label="Disc Type *"
-                  >
-                    <MenuItem value="BLURAY">Blu-ray</MenuItem>
-                    <MenuItem value="HDDVD">HD-DVD</MenuItem>
-                    <MenuItem value="DVD">DVD</MenuItem>
-                  </Select>
-                  {errors.discType && <FormHelperText>{errors.discType}</FormHelperText>}
-                </FormControl>
-                <TextField
-                  fullWidth
-                  label="Language *"
-                  value={formData.language || ''}
-                  onChange={(e) => setFormData({ ...formData, language: e.target.value })}
-                  margin="normal"
-                  required
-                  error={!!errors.language}
-                  helperText={errors.language}
-                />
-                <TextField
-                  fullWidth
-                  label="Subtitles"
-                  value={formData.subtitle || ''}
-                  onChange={(e) => setFormData({ ...formData, subtitle: e.target.value })}
-                  margin="normal"
-                  placeholder="e.g., English, Spanish, French"
-                />
+                {renderMediaSpecificFields()}
               </>
             )}
           </Box>

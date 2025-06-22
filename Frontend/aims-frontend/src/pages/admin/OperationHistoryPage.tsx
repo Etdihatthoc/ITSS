@@ -76,7 +76,7 @@ const OperationHistoryPage: React.FC = () => {
       setError("");
 
       const params = {
-        page,
+        page: page - 1, // Backend expects 0-based pagination
         limit: 10,
         search: searchTerm,
         operationType: operationType || undefined,
@@ -84,10 +84,29 @@ const OperationHistoryPage: React.FC = () => {
         endDate: endDate || undefined,
       };
 
-      const response = await productService.getProductOperationHistory(params);
+      console.log("Fetching operations with params:", params);
 
-      setOperations(response.data.data);
-      setTotalPages(Math.ceil(response.data.total / 10));
+      const response = await productService.getProductOperationHistory(params);
+      
+      console.log("Raw backend response:", response.data);
+
+      // Transform backend data to frontend format
+      const transformedOperations: OperationHistory[] = response.data.data.map((backendOp: any) => ({
+        id: backendOp.operationID.toString(),
+        operationType: backendOp.operationType as OperationType, // Now matches the enum
+        productId: backendOp.product?.id?.toString() || 'N/A',
+        productName: backendOp.product?.title || 'Unknown Product',
+        userId: 'system', // Default value since backend doesn't have this
+        userName: 'System User', // Default value since backend doesn't have this
+        timestamp: backendOp.timestamp,
+        changes: {}, // Could be enhanced later with actual change tracking
+        notes: `Operation on ${backendOp.product?.category || 'Unknown'} category product`
+      }));
+
+      console.log("Transformed operations:", transformedOperations);
+
+      setOperations(transformedOperations);
+      setTotalPages(response.data.totalPages || Math.ceil(response.data.total / 10));
     } catch (err: any) {
       console.error("Failed to fetch operation history:", err);
       setError(
@@ -97,7 +116,6 @@ const OperationHistoryPage: React.FC = () => {
       setLoading(false);
     }
   };
-
   // Handle page change
   const handlePageChange = (_: React.ChangeEvent<unknown>, value: number) => {
     setPage(value);
@@ -147,9 +165,9 @@ const OperationHistoryPage: React.FC = () => {
   // Get operation type label
   const getOperationTypeLabel = (type: OperationType) => {
     const labels = {
-      [OperationType.ADD]: "Add Product",
-      [OperationType.UPDATE]: "Update Product",
-      [OperationType.DELETE]: "Delete Product",
+      [OperationType.ADD_PRODUCT]: "Add Product",
+      [OperationType.UPDATE_PRODUCT]: "Update Product",
+      [OperationType.DELETE_PRODUCT]: "Delete Product",
     };
     return labels[type] || type;
   };
@@ -157,9 +175,9 @@ const OperationHistoryPage: React.FC = () => {
   // Get operation type color
   const getOperationTypeColor = (type: OperationType) => {
     const colors = {
-      [OperationType.ADD]: "success",
-      [OperationType.UPDATE]: "info",
-      [OperationType.DELETE]: "error",
+      [OperationType.ADD_PRODUCT]: "success",
+      [OperationType.UPDATE_PRODUCT]: "info",
+      [OperationType.DELETE_PRODUCT]: "error",
     };
     return colors[type] || "default";
   };
@@ -241,21 +259,17 @@ const OperationHistoryPage: React.FC = () => {
 
         <Collapse in={showFilters}>
           <Box sx={{ display: "flex", flexWrap: "wrap", gap: 2, mb: 2 }}>
-            <FormControl sx={{ minWidth: 180 }}>
+            <FormControl sx={{ minWidth: 200 }}>
               <InputLabel>Operation Type</InputLabel>
               <Select
                 value={operationType}
-                onChange={(e) =>
-                  setOperationType(e.target.value as OperationType | "")
-                }
+                onChange={(e) => setOperationType(e.target.value as OperationType | "")}
                 label="Operation Type"
               >
-                <MenuItem value="">All Types</MenuItem>
-                {Object.values(OperationType).map((type) => (
-                  <MenuItem key={type} value={type}>
-                    {getOperationTypeLabel(type)}
-                  </MenuItem>
-                ))}
+                <MenuItem value="">All</MenuItem>
+                <MenuItem value={OperationType.ADD_PRODUCT}>Add Product</MenuItem>
+                <MenuItem value={OperationType.UPDATE_PRODUCT}>Update Product</MenuItem>
+                <MenuItem value={OperationType.DELETE_PRODUCT}>Delete Product</MenuItem>
               </Select>
             </FormControl>
 

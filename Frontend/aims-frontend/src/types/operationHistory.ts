@@ -1,8 +1,8 @@
 // src/types/operationHistory.ts
 export enum OperationType {
-  ADD = "ADD",
-  UPDATE = "UPDATE",
-  DELETE = "DELETE",
+  ADD_PRODUCT = "ADD_PRODUCT",
+  UPDATE_PRODUCT = "UPDATE_PRODUCT", 
+  DELETE_PRODUCT = "DELETE_PRODUCT",
 }
 
 export interface OperationHistory {
