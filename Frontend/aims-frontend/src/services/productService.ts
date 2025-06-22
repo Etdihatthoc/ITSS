@@ -56,9 +56,14 @@ const productService = {
     return await api.delete(`/products/${id}`);
   },
 
+  // Bulk delete products (product manager only) - NEW METHOD
+  deleteBulkProducts: async (ids: string[]) => {
+    return await api.delete("/products/bulk", { data: ids });
+  },
+
   // Delete multiple products (product manager only)
   deleteMultipleProducts: async (ids: string[]) => {
-    return await api.post("/products/delete-multiple", { ids });
+    return await api.delete("/products/bulk", { data: ids });
   },
 
   // Get product history (product manager only)

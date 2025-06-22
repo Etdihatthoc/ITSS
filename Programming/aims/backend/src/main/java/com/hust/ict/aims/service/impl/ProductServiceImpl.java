@@ -14,7 +14,9 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDateTime;
 import java.util.List;
+
 /*
  * Cohesion Level: Functional Cohesion
  * This class exhibits functional cohesion because all its methods focus on a single responsibility:
@@ -59,13 +61,13 @@ public class ProductServiceImpl implements ProductService {
 
     @Override
     public List<Product> findAll() {
-        return productRepository.findAll();
+        return productRepository.findAllActive();
     }
 
     @Override
     public Page<ProductDTO> findRandom(int page, int size) {
         Pageable pageable = PageRequest.of(page, size);
-        return repo.findAllRandom(pageable)
+        return repo.findAllActiveRandom(pageable)
                 .map(ProductDTO::fromEntity);
     }
 
@@ -77,7 +79,17 @@ public class ProductServiceImpl implements ProductService {
     }
 
     @Override
-    public void delete(Long id) {
+    public void softDelete(Long id) {
+        Product product = productRepository.findById(id)
+            .orElseThrow(() -> new RuntimeException("Product not found"));
+        product.setDeleted(true);
+        product.setDeletedAt(LocalDateTime.now());
+        productRepository.save(product);
+    }
+
+    @Override
+    public void hardDelete(Long id) {
+        // Simple hard delete - operations will be handled by the controller
         productRepository.deleteById(id);
     }
 }

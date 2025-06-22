@@ -1,5 +1,7 @@
 package com.hust.ict.aims.model;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+
 import jakarta.persistence.*;
 
 /* Cohesion Level: Functional Cohesion
@@ -9,7 +11,6 @@ import jakarta.persistence.*;
 @Entity
 @Inheritance(strategy = InheritanceType.JOINED)
 @DiscriminatorColumn(name = "product_type", discriminatorType = DiscriminatorType.STRING)
-@DiscriminatorValue("PRODUCT")
 @Table(name = "product")
 public class Product {
 
@@ -17,9 +18,6 @@ public class Product {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "product_id")
     private Long id;
-
-    @Column(name = "product_type", insertable = false, updatable = false) // Add this
-    private String productType;
 
     @Column(nullable = false)
     private String imageURL;
@@ -58,6 +56,28 @@ public class Product {
     private int quantity;
 
     private String genre;
+
+    @Column(nullable = false)
+    private boolean deleted = false;
+
+    @Column(name = "deleted_at")
+    private LocalDateTime deletedAt;
+    
+    public boolean isDeleted() {
+        return deleted;
+    }
+
+    public void setDeleted(boolean deleted) {
+        this.deleted = deleted;
+    }
+
+    public LocalDateTime getDeletedAt() {
+        return deletedAt;
+    }
+
+    public void setDeletedAt(LocalDateTime deletedAt) {
+        this.deletedAt = deletedAt;
+    }
 
     // Getters and Setters
     public Long getId() {
@@ -170,20 +190,5 @@ public class Product {
 
     public void setGenre(String genre) {
         this.genre = genre;
-    }
-
-    @PostLoad
-    @PostPersist
-    @PostUpdate
-    protected void updateProductType() {
-        if (this instanceof Book) {
-            this.productType = "BOOK";
-        } else if (this instanceof CD) {
-            this.productType = "CD";
-        } else if (this instanceof LP) {
-            this.productType = "LP";
-        } else if (this instanceof DVD) {
-            this.productType = "DVD";
-        }
     }
 }

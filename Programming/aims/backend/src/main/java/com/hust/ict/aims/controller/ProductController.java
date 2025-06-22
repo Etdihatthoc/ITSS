@@ -4,10 +4,12 @@ import com.hust.ict.aims.dto.*;
 import com.hust.ict.aims.exception.ProductNotFoundException;
 import com.hust.ict.aims.model.*;
 import com.hust.ict.aims.repository.ProductRepository;
+import com.hust.ict.aims.repository.OperationRepository;
+import com.hust.ict.aims.service.AddProductOperation;
+import com.hust.ict.aims.service.BusinessRulesService;
 import com.hust.ict.aims.service.OperationService;
 import com.hust.ict.aims.service.ProductService;
-import com.hust.ict.aims.service.ProductValidationService;
-import org.springframework.beans.factory.annotation.Autowired;
+import com.hust.ict.aims.service.UpdateProductOperation;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;
@@ -18,78 +20,43 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
-import com.hust.ict.aims.service.BusinessRuleValidator;
-import com.hust.ict.aims.factory.ProductFactory;
+
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import java.util.Collections;
+import java.util.HashMap;
+
+import java.util.Map;
+import java.util.HashMap;
+import java.util.Collections;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/products")
 @CrossOrigin(origins = "http://localhost:5173")
 public class ProductController {
+    
+    @Autowired
+    private AddProductOperation addProductOperation;
 
+    @Autowired
+    private UpdateProductOperation updateProductOperation;
+
+    @Autowired
+    private BusinessRulesService businessRulesService;
     private final ProductService productService;
     private final OperationService operationService;
-    private final BusinessRuleValidator businessRuleValidator; // Change to final
-    private final ProductFactory productFactory; // Change to final
 
     public ProductController(ProductService productService,
-                             OperationService operationService,
-                             BusinessRuleValidator businessRuleValidator,
-                             ProductFactory productFactory) {
+                             OperationService operationService) {
         this.productService = productService;
         this.operationService = operationService;
-        this.businessRuleValidator = businessRuleValidator;
-        this.productFactory = productFactory;
     }
 
     @PostMapping
-    public ResponseEntity<?> save(@RequestBody Product product) {
-        try {
-            // Check daily limits for adds
-            if (!businessRuleValidator.canExecuteOperation(null, "ADD_PRODUCT")) {
-                return ResponseEntity.badRequest()
-                        .body(businessRuleValidator.getFailureReason("ADD_PRODUCT"));
-            }
-
-            validateProductInformation(product);
-            Product saved = productService.save(product);
-
-            Operation op = new Operation();
-            op.setProduct(saved);
-            op.setOperationType("ADD_PRODUCT");
-            op.setTimestamp(LocalDateTime.now());
-            operationService.save(op);
-
-            return ResponseEntity.ok(saved);
-        } catch (ResponseStatusException e) {
-            return ResponseEntity.status(e.getStatusCode()).body(e.getReason());
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().body("Error creating product: " + e.getMessage());
-        }
-    }
-
-    // Add new endpoint for creating products with factory
-    @PostMapping("/create")
-    public ResponseEntity<?> createProduct(@RequestBody ProductCreateRequest request) {
-        try {
-            if (!businessRuleValidator.canExecuteOperation(null, "ADD_PRODUCT")) {
-                return ResponseEntity.badRequest()
-                        .body(businessRuleValidator.getFailureReason("ADD_PRODUCT"));
-            }
-
-            Product product = productFactory.createProduct(request);
-            validateProductInformation(product);
-            Product saved = productService.save(product);
-
-            Operation op = new Operation();
-            op.setProduct(saved);
-            op.setOperationType("ADD_PRODUCT");
-            op.setTimestamp(LocalDateTime.now());
-            operationService.save(op);
-
-            return ResponseEntity.ok(saved);
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().body("Error creating product: " + e.getMessage());
-        }
+    public Product save(@RequestBody Product product) {
+        return addProductOperation.executeOperation(product, "ADD_PRODUCT");
     }
 
     // Phương thức kiểm tra tính hợp lệ của thông tin sản phẩm
@@ -156,6 +123,69 @@ public class ProductController {
             );
         }
     }
+
+    @GetMapping("/operations")
+    public ResponseEntity<Map<String, Object>> getProductOperations(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int limit,
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) String operationType,
+            @RequestParam(required = false) String startDate,
+            @RequestParam(required = false) String endDate,
+            @RequestParam(required = false) String productId,
+            @RequestParam(required = false) String userId) {
+        
+        try {
+            // Use the service layer instead of repository directly
+            Page<Operation> operationsPage = operationService.findOperationsWithFilters(
+                    search, operationType, page, limit);
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("data", operationsPage.getContent());
+            response.put("total", operationsPage.getTotalElements());
+            response.put("page", page);
+            response.put("totalPages", operationsPage.getTotalPages());
+            
+            return ResponseEntity.ok(response);
+            
+        } catch (Exception e) {
+            e.printStackTrace();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(Collections.singletonMap("error", "Failed to fetch operations: " + e.getMessage()));
+        }
+    }
+
+    @GetMapping("/{productId}/operations")
+    public ResponseEntity<Map<String, Object>> getProductOperationHistory(
+            @PathVariable Long productId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int limit) {
+        
+        try {
+            // Use service layer
+            List<Operation> allProductOperations = operationService.findByProductId(productId);
+            
+            // Apply pagination manually (or you can create a paginated version in service)
+            int start = page * limit;
+            int end = Math.min(start + limit, allProductOperations.size());
+            List<Operation> paginatedOperations = start < allProductOperations.size() ? 
+                allProductOperations.subList(start, end) : Collections.emptyList();
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("data", paginatedOperations);
+            response.put("total", allProductOperations.size());
+            response.put("page", page);
+            response.put("totalPages", (int) Math.ceil((double) allProductOperations.size() / limit));
+            
+            return ResponseEntity.ok(response);
+            
+        } catch (Exception e) {
+            e.printStackTrace();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(Collections.singletonMap("error", "Failed to fetch product operations: " + e.getMessage()));
+        }
+    } 
+    
     @GetMapping("/{id}")
     public ResponseEntity<ProductDTO> findById(@PathVariable Long id) {
         Product product = productService.findById(id);
@@ -180,45 +210,43 @@ public class ProductController {
 //    }
 
     @PutMapping("/{id}")
-    public ResponseEntity<?> update(@PathVariable Long id, @RequestBody Product product) {
-        try {
-            // Check if product exists
-            Product existingProduct = productService.findById(id);
-            if (existingProduct == null) {
-                return ResponseEntity.notFound().build();
-            }
-
-            // Check daily limits for updates
-            if (!businessRuleValidator.canExecuteOperation(id, "UPDATE_PRODUCT")) {
-                return ResponseEntity.badRequest()
-                        .body(businessRuleValidator.getFailureReason("UPDATE_PRODUCT"));
-            }
-
-            validateProductInformation(product);
-
-            // Check price update rules
-            if (existingProduct.getCurrentPrice() != product.getCurrentPrice()) {
-                validatePriceRange(product.getValue(), product.getCurrentPrice());
-                validatePriceUpdateFrequency(id);
-            }
-
-            product.setId(id);
-            Product updated = productService.save(product);
-
-            Operation op = new Operation();
-            op.setProduct(updated);
-            op.setOperationType("UPDATE_PRODUCT");
-            op.setTimestamp(LocalDateTime.now());
-            operationService.save(op);
-
-            return ResponseEntity.ok(updated);
-        } catch (ResponseStatusException e) {
-            return ResponseEntity.status(e.getStatusCode()).body(e.getReason());
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().body("Error updating product: " + e.getMessage());
-        }
+    public Product update(@PathVariable Long id, @RequestBody Product product) {
+        return updateProductOperation.setProductId(id).executeOperation(product, "UPDATE_PRODUCT");
     }
 
+    @DeleteMapping("/bulk")
+    public ResponseEntity<String> deleteBulk(@RequestBody List<Long> productIds) {
+        if (!businessRulesService.canPerformBulkDelete(productIds.size())) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Cannot delete more than 10 products at once"
+            );
+        }
+        
+        try {
+            businessRulesService.acquireOperationLock("DELETE_PRODUCT");
+            businessRulesService.validateDailyOperationLimits("DELETE_PRODUCT", LocalDateTime.now());
+            
+            for (Long id : productIds) {
+                Product product = productService.findById(id);
+                if (product != null) {
+                    productService.softDelete(id);
+                    
+                    // Log each deletion
+                    Operation op = new Operation();
+                    op.setProduct(product);
+                    op.setOperationType("DELETE_PRODUCT");
+                    op.setTimestamp(LocalDateTime.now());
+                    operationService.save(op);
+                }
+            }
+            
+            return ResponseEntity.ok("Successfully deleted " + productIds.size() + " products");
+            
+        } finally {
+            businessRulesService.releaseOperationLock("DELETE_PRODUCT");
+        }
+    }
     // Kiểm tra giá mới có nằm trong khoảng 30%-150% của giá trị không
     private void validatePriceRange(float productValue, float newPrice) {
         float minPrice = productValue * 0.3f;  // 30% của giá trị
@@ -251,16 +279,35 @@ public class ProductController {
     }
 
     @DeleteMapping("/{id}")
-    public void delete(@PathVariable Long id) {
-        productService.delete(id);
-        Operation op = new Operation();
-        Product dummy = new Product();
-        dummy.setId(id);
-        op.setProduct(dummy);
-        op.setOperationType("DELETE_PRODUCT");
-        op.setTimestamp(LocalDateTime.now());
-        operationService.save(op);
+    public ResponseEntity<String> delete(@PathVariable Long id) {
+        try {
+            businessRulesService.acquireOperationLock("DELETE_PRODUCT");
+            businessRulesService.validateDailyOperationLimits("DELETE_PRODUCT", LocalDateTime.now());
+            
+            Product product = productService.findById(id);
+            if (product == null) {
+                throw new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "Product with ID " + id + " not found"
+                );
+            }
+            
+            // Soft delete the product
+            productService.softDelete(id);
+            
+            // Log the operation
+            Operation op = new Operation();
+            op.setProduct(product); // Use the existing product object
+            op.setOperationType("DELETE_PRODUCT");
+            op.setTimestamp(LocalDateTime.now());
+            operationService.save(op);
+            
+            return ResponseEntity.ok("Product deleted successfully");
+            
+        } finally {
+            businessRulesService.releaseOperationLock("DELETE_PRODUCT");
+        }
     }
+
     @PostMapping("/check-inventory")
     public ResponseEntity<?> checkInventory(@RequestBody CartItemsRequest request) {
         List<OutOfStockProduct> outOfStockProducts = new ArrayList<>();
@@ -291,5 +338,4 @@ public class ProductController {
             );
         }
     }
-
 }

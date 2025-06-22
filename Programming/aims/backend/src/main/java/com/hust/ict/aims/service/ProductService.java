@@ -19,5 +19,6 @@ public interface ProductService {
     List<Product> findAll();
     Page<ProductDTO> findRandom(int page, int size);
     Product update(Long id, Product product);
-    void delete(Long id);
+    void softDelete(Long id);
+    void hardDelete(Long id); // For admin use only
 }

@@ -87,38 +87,76 @@ export interface ProductCreate {
   title: string;
   category: string;
   value: number;
-  price: number;
-  description: string;
+  currentPrice: number;
+  productDescription: string;
   barcode: string;
   quantity: number;
   warehouseEntryDate: string;
-  dimensions: string;
+  productDimensions: string;
   weight: number;
-  imageUrl?: string;
+  imageURL: string;
+  rushOrderEligible?: boolean;
   mediaType: MediaType;
+  genre?: string;
 
-  // Book specific properties
-  authors?: string[];
+  // Book specific properties - NOW REQUIRED for books
+  author?: string;
   coverType?: CoverType;
   publisher?: string;
   publicationDate?: string;
-  pages?: number;
-  language?: string | string[];
-  genre?: string;
+  numberOfPage?: number;
+  language?: string;
 
-  // CD/LP specific properties
-  artists?: string[];
+  // CD/LP specific properties - NOW REQUIRED for CDs/LPs
+  artist?: string;
   recordLabel?: string;
-  tracklist?: string[];
+  tracklist?: string;
+  album?: string;
   releaseDate?: string;
 
-  // DVD specific properties
+  // DVD specific properties - NOW REQUIRED for DVDs
   discType?: DiscType;
   director?: string;
-  runtime?: number;
+  runtime?: string;
   studio?: string;
-  subtitles?: string[];
+  subtitle?: string;
 }
+// export interface ProductCreate {
+//   title: string;
+//   category: string;
+//   value: number;
+//   price: number;
+//   description: string;
+//   barcode: string;
+//   quantity: number;
+//   warehouseEntryDate: string;
+//   dimensions: string;
+//   weight: number;
+//   imageUrl?: string;
+//   mediaType: MediaType;
+
+//   // Book specific properties
+//   authors?: string[];
+//   coverType?: CoverType;
+//   publisher?: string;
+//   publicationDate?: string;
+//   pages?: number;
+//   language?: string | string[];
+//   genre?: string;
+
+//   // CD/LP specific properties
+//   artists?: string[];
+//   recordLabel?: string;
+//   tracklist?: string[];
+//   releaseDate?: string;
+
+//   // DVD specific properties
+//   discType?: DiscType;
+//   director?: string;
+//   runtime?: number;
+//   studio?: string;
+//   subtitles?: string[];
+// }
 
 // Interface for updating an existing product
 export interface ProductUpdate extends Partial<ProductCreate> {

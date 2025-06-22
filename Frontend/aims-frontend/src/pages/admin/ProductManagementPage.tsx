@@ -1,11 +1,13 @@
-// src/pages/admin/ProductManagementPage.tsx
 import React, { useState, useEffect } from "react";
 import {
   Container,
   Typography,
   Box,
-  Paper,
   Button,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
   TextField,
   Table,
   TableBody,
@@ -13,82 +15,151 @@ import {
   TableContainer,
   TableHead,
   TableRow,
+  Paper,
   IconButton,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogContentText,
-  DialogTitle,
-  FormControlLabel,
+  Pagination,
   CircularProgress,
   Alert,
-  Pagination,
-  InputAdornment,
+  Chip,
   Checkbox,
+  FormControl,
+  FormHelperText,
+  InputLabel,
+  MenuItem,
+  Select,
 } from "@mui/material";
-import { SelectChangeEvent } from "@mui/material/Select";
 import {
   Add as AddIcon,
   Edit as EditIcon,
   Delete as DeleteIcon,
   Search as SearchIcon,
 } from "@mui/icons-material";
-import { Product, MediaType } from "../../types/product";
+import { toast } from "react-toastify";
 import productService from "../../services/productService";
+import { Product, CoverType, DiscType, MediaType } from "../../types/product";
+
+interface FormData {
+  title: string;
+  productDescription: string;
+  currentPrice: string;
+  quantity: string;
+  category: string;
+  barcode: string;
+  productDimensions: string;
+  weight: string;
+  imageURL: string;
+  rushOrderEligible: boolean;
+  genre: string;
+  value: string;
+  warehouseEntryDate: string;
+  mediaType: string;
+  // Book fields
+  author?: string;
+  coverType?: CoverType;
+  publisher?: string;
+  publicationDate?: string;
+  numberOfPage?: string;
+  language?: string;
+  // CD/LP fields
+  artist?: string;
+  album?: string;
+  recordLabel?: string;
+  tracklist?: string;
+  releaseDate?: string;
+  // DVD fields
+  director?: string;
+  studio?: string;
+  runtime?: string;
+  discType?: DiscType;
+  subtitle?: string;
+}
+
+interface ValidationErrors {
+  [key: string]: string;
+}
 
 const ProductManagementPage: React.FC = () => {
-  // State for products
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-
-  // State for pagination
+  const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [searchTerm, setSearchTerm] = useState("");
-
-  // State for product dialog
   const [openProductDialog, setOpenProductDialog] = useState(false);
-  const [dialogTitle, setDialogTitle] = useState("");
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
-  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
-  const [formSubmitting, setFormSubmitting] = useState(false);
+  const [dialogTitle, setDialogTitle] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [selectedProducts, setSelectedProducts] = useState<string[]>([]);
+  const [bulkDeleteLoading, setBulkDeleteLoading] = useState(false);
+  const [errors, setErrors] = useState<ValidationErrors>({});
 
-  // State for delete confirmation dialog
-  const [openDeleteDialog, setOpenDeleteDialog] = useState(false);
-  const [productToDelete, setProductToDelete] = useState<Product | null>(null);
-  const [deleteLoading, setDeleteLoading] = useState(false);
-
-  // Form data state
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<FormData>({
     title: "",
-    productDescription: "", // Changed from description
-    currentPrice: "", // Changed from price
+    productDescription: "",
+    currentPrice: "",
     quantity: "",
     category: "",
     barcode: "",
-    productDimensions: "", // Changed from dimensions
+    productDimensions: "",
     weight: "",
-    imageURL: "", // Changed from imageUrl
-    rushOrderEligible: true, // New field
-    genre: "", // New field
-    value: "", // New field
-    warehouseEntryDate: new Date().toISOString().split("T")[0], // Format as YYYY-MM-DD
+    imageURL: "",
+    rushOrderEligible: true,
+    genre: "",
+    value: "",
+    warehouseEntryDate: "",
+    mediaType: "BOOK",
+    // Book fields
+    author: "",
+    coverType: undefined,
+    publisher: "",
+    publicationDate: "",
+    numberOfPage: "",
+    language: "",
+    // CD/LP fields
+    artist: "",
+    album: "",
+    recordLabel: "",
+    tracklist: "",
+    releaseDate: "",
+    // DVD fields
+    director: "",
+    studio: "",
+    runtime: "",
+    discType: undefined,
+    subtitle: "",
   });
 
-  // Load products on component mount and when page or search changes
   useEffect(() => {
     fetchProducts();
-  }, [page, searchTerm]);
+  }, [page]);
 
-  // Fetch products from API
   const fetchProducts = async () => {
     try {
       setLoading(true);
-      setError("");
+      setError(null);
 
-      const response = await productService.getAllProducts();
-      // If search term is provided, filter products
+      let response;
+      if (searchTerm.trim()) {
+        // If search term is provided, use search endpoint
+        response = await productService.searchProducts({
+          search: searchTerm,
+          page: page - 1,
+          limit: 10,
+        });
+      } else {
+        // Otherwise, get all products
+        response = await productService.getAllProducts();
+        // For pagination, we'll slice the results
+        const startIndex = (page - 1) * 10;
+        const endIndex = startIndex + 10;
+        const paginatedData = response.data.slice(startIndex, endIndex);
+        response = {
+          data: {
+            data: paginatedData,
+            total: response.data.length,
+          }
+        };
+      }
 
       setProducts(response.data.data);
       setTotalPages(Math.ceil(response.data.total / 10));
@@ -137,46 +208,177 @@ const ProductManagementPage: React.FC = () => {
       imageURL: product.imageURL || "",
       rushOrderEligible: product.rushOrderEligible || true,
       genre: product.genre || "",
-      value: product.value
-        ? product.value.toString()
-        : product.currentPrice.toString(),
-      warehouseEntryDate:
-        product.warehouseEntryDate?.split("T")[0] ||
-        new Date().toISOString().split("T")[0],
+      value: product.value ? product.value.toString() : "",
+      warehouseEntryDate: product.warehouseEntryDate || "",
+      mediaType: product.mediaType || "BOOK",
+      // Book fields
+      author: (product as any).author || "",
+      coverType: (product as any).coverType,
+      publisher: (product as any).publisher || "",
+      publicationDate: (product as any).publicationDate || "",
+      numberOfPage: (product as any).numberOfPage?.toString() || "",
+      language: (product as any).language || "",
+      // CD/LP fields
+      artist: (product as any).artist || "",
+      album: (product as any).album || "",
+      recordLabel: (product as any).recordLabel || "",
+      tracklist: (product as any).tracklist || "",
+      releaseDate: (product as any).releaseDate || "",
+      // DVD fields
+      director: (product as any).director || "",
+      studio: (product as any).studio || "",
+      runtime: (product as any).runtime || "",
+      discType: (product as any).discType,
+      subtitle: (product as any).subtitle || "",
     });
-
     setOpenProductDialog(true);
   };
 
-  // Open dialog to confirm product deletion
-  const handleDeleteClick = (product: Product) => {
-    setProductToDelete(product);
-    setOpenDeleteDialog(true);
-  };
+  // Delete a product
+  const handleDeleteProduct = async (id: string) => {
+    const confirmed = window.confirm(
+      "Are you sure you want to delete this product? This action cannot be undone."
+    );
 
-  // Delete product
-  const handleDeleteConfirm = async () => {
-    if (!productToDelete) return;
+    if (!confirmed) return;
 
     try {
-      setDeleteLoading(true);
-      await productService.deleteProduct(productToDelete.id);
-
-      // Refresh product list
+      await productService.deleteProduct(id);
+      toast.success("Product deleted successfully");
       fetchProducts();
-
-      // Close dialog
-      setOpenDeleteDialog(false);
-      setProductToDelete(null);
     } catch (err: any) {
       console.error("Failed to delete product:", err);
-      setError(err.response?.data?.message || "Failed to delete product");
-    } finally {
-      setDeleteLoading(false);
+      if (err.response?.status === 400) {
+        toast.error(err.response.data.message || "Cannot delete product due to business rules");
+      } else if (err.response?.status === 409) {
+        toast.error("Another operation is in progress. Please try again later.");
+      } else {
+        toast.error("Failed to delete product");
+      }
     }
   };
 
-  // Reset form with all fields
+  // Handle product selection
+  const handleSelectProduct = (productId: string, checked: boolean) => {
+    if (checked) {
+      setSelectedProducts([...selectedProducts, productId]);
+    } else {
+      setSelectedProducts(selectedProducts.filter(id => id !== productId));
+    }
+  };
+
+  // Handle select all
+  const handleSelectAll = (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (event.target.checked) {
+      setSelectedProducts(products.map(product => product.id.toString()));
+    } else {
+      setSelectedProducts([]);
+    }
+  };
+
+  // Handle bulk delete
+  const handleBulkDelete = async () => {
+    if (selectedProducts.length === 0) return;
+    
+    if (selectedProducts.length > 10) {
+      toast.error("Cannot delete more than 10 products at once");
+      return;
+    }
+    
+    const confirmed = window.confirm(
+      `Are you sure you want to delete ${selectedProducts.length} products? This action cannot be undone.`
+    );
+    
+    if (!confirmed) return;
+    
+    setBulkDeleteLoading(true);
+    
+    try {
+      await productService.deleteBulkProducts(selectedProducts);
+      toast.success(`Successfully deleted ${selectedProducts.length} products`);
+      setSelectedProducts([]);
+      fetchProducts(); // Refresh the list
+    } catch (err: any) {
+      console.error("Failed to delete products:", err);
+      if (err.response?.status === 400) {
+        toast.error(err.response.data.message || "Cannot delete products due to business rules");
+      } else if (err.response?.status === 409) {
+        toast.error("Another operation is in progress. Please try again later.");
+      } else {
+        toast.error("Failed to delete products");
+      }
+    } finally {
+      setBulkDeleteLoading(false);
+    }
+  };
+
+  // Save or update product
+  const handleSaveProduct = async () => {
+    try {
+      setSaving(true);
+      setErrors({});
+      
+      const productData = {
+        ...formData,
+        currentPrice: parseFloat(formData.currentPrice),
+        quantity: parseInt(formData.quantity),
+        weight: parseFloat(formData.weight),
+        value: parseFloat(formData.value),
+        warehouseEntryDate: formData.warehouseEntryDate,
+        numberOfPage: formData.numberOfPage ? parseInt(formData.numberOfPage) : undefined,
+      };
+
+      if (selectedProduct) {
+        await productService.updateProduct(selectedProduct.id.toString(), productData);
+        toast.success("Product updated successfully");
+      } else {
+        await productService.addProduct(productData);
+        toast.success("Product added successfully");
+      }
+
+      setOpenProductDialog(false);
+      fetchProducts();
+      resetForm();
+    } catch (err: any) {
+      console.error("Failed to save product:", err);
+      
+      if (err.response?.status === 400) {
+        const errorMessage = err.response.data.message || err.response.data.error || "Validation failed";
+        
+        // Parse validation errors for specific fields
+        if (errorMessage.includes("author")) {
+          setErrors(prev => ({ ...prev, author: "Author is required for books" }));
+        }
+        if (errorMessage.includes("coverType")) {
+          setErrors(prev => ({ ...prev, coverType: "Cover type is required for books" }));
+        }
+        if (errorMessage.includes("publisher")) {
+          setErrors(prev => ({ ...prev, publisher: "Publisher is required for books" }));
+        }
+        if (errorMessage.includes("artist")) {
+          setErrors(prev => ({ ...prev, artist: "Artist is required for CDs/LPs" }));
+        }
+        if (errorMessage.includes("director")) {
+          setErrors(prev => ({ ...prev, director: "Director is required for DVDs" }));
+        }
+        if (errorMessage.includes("daily limit")) {
+          toast.error("Daily operation limit exceeded. Cannot perform more operations today.");
+        } else if (errorMessage.includes("price more than 2 times")) {
+          toast.error("Cannot update product price more than 2 times per day");
+        } else {
+          toast.error(errorMessage);
+        }
+      } else if (err.response?.status === 409) {
+        toast.error("Another operation is in progress. Please try again later.");
+      } else {
+        toast.error("Failed to save product");
+      }
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Reset form
   const resetForm = () => {
     setFormData({
       title: "",
@@ -191,150 +393,29 @@ const ProductManagementPage: React.FC = () => {
       rushOrderEligible: true,
       genre: "",
       value: "",
-      warehouseEntryDate: new Date().toISOString().split("T")[0],
+      warehouseEntryDate: "",
+      mediaType: "BOOK",
+      // Book fields
+      author: "",
+      coverType: undefined,
+      publisher: "",
+      publicationDate: "",
+      numberOfPage: "",
+      language: "",
+      // CD/LP fields
+      artist: "",
+      album: "",
+      recordLabel: "",
+      tracklist: "",
+      releaseDate: "",
+      // DVD fields
+      director: "",
+      studio: "",
+      runtime: "",
+      discType: undefined,
+      subtitle: "",
     });
-    setFormErrors({});
-  };
-
-  // Handle form input changes
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-
-    setFormData({
-      ...formData,
-      [name]: value,
-    });
-
-    // Clear error when field is edited
-    if (formErrors[name]) {
-      setFormErrors({
-        ...formErrors,
-        [name]: "",
-      });
-    }
-  };
-
-  // Handle Select (dropdown) changes
-  const handleSelectChange = (
-    e: React.ChangeEvent<{ name?: string; value: unknown }> | SelectChangeEvent
-  ) => {
-    const name = (e.target as HTMLInputElement).name;
-    const value = e.target.value;
-
-    setFormData({
-      ...formData,
-      [name]: value,
-    });
-
-    // Clear error when field is edited
-    if (formErrors[name]) {
-      setFormErrors({
-        ...formErrors,
-        [name]: "",
-      });
-    }
-  };
-
-  // Validate form
-  const validateForm = () => {
-    const errors: Record<string, string> = {};
-
-    if (!formData.title.trim()) {
-      errors.title = "Title is required";
-    }
-
-    if (!formData.currentPrice.trim()) {
-      errors.currentPrice = "Price is required";
-    } else if (
-      isNaN(Number(formData.currentPrice)) ||
-      Number(formData.currentPrice) <= 0
-    ) {
-      errors.currentPrice = "Price must be a positive number";
-    }
-
-    if (!formData.value.trim()) {
-      errors.value = "Value is required";
-    } else if (isNaN(Number(formData.value)) || Number(formData.value) <= 0) {
-      errors.value = "Value must be a positive number";
-    }
-
-    if (!formData.quantity.trim()) {
-      errors.quantity = "Quantity is required";
-    } else if (
-      isNaN(Number(formData.quantity)) ||
-      Number(formData.quantity) < 0
-    ) {
-      errors.quantity = "Quantity must be a non-negative number";
-    }
-
-    if (!formData.category.trim()) {
-      errors.category = "Category is required";
-    }
-
-    if (
-      formData.weight &&
-      (isNaN(Number(formData.weight)) || Number(formData.weight) <= 0)
-    ) {
-      errors.weight = "Weight must be a positive number";
-    }
-
-    setFormErrors(errors);
-    return Object.keys(errors).length === 0;
-  };
-
-  // Handle form submission
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    if (!validateForm()) {
-      return;
-    }
-
-    try {
-      setFormSubmitting(true);
-
-      // Format data to match API requirements
-      const productData = {
-        title: formData.title,
-        description: formData.productDescription,
-        price: Number(formData.currentPrice),
-        currentPrice: Number(formData.currentPrice),
-        quantity: Number(formData.quantity),
-        category: formData.category,
-        barcode: formData.barcode,
-        dimensions: formData.productDimensions,
-        productDimensions: formData.productDimensions,
-        weight: formData.weight ? Number(formData.weight) : 0.1,
-        imageURL: formData.imageURL,
-        rushOrderEligible: formData.rushOrderEligible,
-        genre: formData.genre || "General",
-        value: Number(formData.value) || Number(formData.currentPrice),
-        warehouseEntryDate: formData.warehouseEntryDate,
-        mediaType: MediaType.BOOK, // Default media type, adjust as needed
-      };
-
-      if (selectedProduct) {
-        // Update existing product
-        await productService.updateProduct(selectedProduct.id, productData);
-      } else {
-        // Create new product
-        await productService.addProduct(productData);
-      }
-
-      // Refresh product list
-      fetchProducts();
-
-      // Close dialog
-      setOpenProductDialog(false);
-
-      // Show success message
-      setError(""); // Clear any previous errors
-    } catch (err: any) {
-      console.error("Failed to save product:", err);
-      setError(err.response?.data?.message || "Failed to save product");
-    } finally {
-      setFormSubmitting(false);
-    }
+    setErrors({});
   };
 
   // Format price for display
@@ -345,16 +426,15 @@ const ProductManagementPage: React.FC = () => {
     }).format(price);
   };
 
-  // Get media type label
-  const getMediaTypeLabel = (mediaType: MediaType) => {
-    const labels = {
-      [MediaType.BOOK]: "Book",
-      [MediaType.CD]: "CD",
-      [MediaType.LP]: "LP Record",
-      [MediaType.DVD]: "DVD",
-    };
-    return labels[mediaType] || mediaType;
-  };
+  if (loading) {
+    return (
+      <Container maxWidth="lg" sx={{ py: 4 }}>
+        <Box display="flex" justifyContent="center">
+          <CircularProgress />
+        </Box>
+      </Container>
+    );
+  }
 
   return (
     <Container maxWidth="lg" sx={{ py: 4 }}>
@@ -367,13 +447,43 @@ const ProductManagementPage: React.FC = () => {
         }}
       >
         <Typography variant="h4">Product Management</Typography>
+        <Box sx={{ display: "flex", gap: 2 }}>
+          <Button
+            variant="contained"
+            startIcon={<AddIcon />}
+            onClick={handleAddProduct}
+          >
+            Add Product
+          </Button>
+          {selectedProducts.length > 0 && (
+            <Button
+              variant="outlined"
+              color="error"
+              startIcon={<DeleteIcon />}
+              onClick={handleBulkDelete}
+              disabled={bulkDeleteLoading}
+            >
+              Delete Selected ({selectedProducts.length})
+            </Button>
+          )}
+        </Box>
+      </Box>
+
+      {/* Search Section */}
+      <Box sx={{ mb: 3, display: "flex", gap: 2 }}>
+        <TextField
+          fullWidth
+          label="Search products..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          onKeyPress={(e) => e.key === "Enter" && handleSearch()}
+        />
         <Button
-          variant="contained"
-          color="primary"
-          startIcon={<AddIcon />}
-          onClick={handleAddProduct}
+          variant="outlined"
+          startIcon={<SearchIcon />}
+          onClick={handleSearch}
         >
-          Add Product
+          Search
         </Button>
       </Box>
 
@@ -383,98 +493,82 @@ const ProductManagementPage: React.FC = () => {
         </Alert>
       )}
 
-      <Paper sx={{ p: 2, mb: 3 }}>
-        <Box sx={{ display: "flex", alignItems: "center", mb: 2 }}>
-          <TextField
-            placeholder="Search products..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            onKeyPress={(e) => e.key === "Enter" && handleSearch()}
-            sx={{ flexGrow: 1, mr: 2 }}
-            InputProps={{
-              startAdornment: (
-                <InputAdornment position="start">
-                  <SearchIcon />
-                </InputAdornment>
-              ),
-            }}
-          />
-          <Button variant="outlined" onClick={handleSearch}>
-            Search
-          </Button>
-        </Box>
+      {/* Products Table */}
+      <TableContainer component={Paper}>
+        <Table>
+          <TableHead>
+            <TableRow>
+              <TableCell padding="checkbox">
+                <Checkbox
+                  indeterminate={selectedProducts.length > 0 && selectedProducts.length < products.length}
+                  checked={products.length > 0 && selectedProducts.length === products.length}
+                  onChange={handleSelectAll}
+                />
+              </TableCell>
+              <TableCell>ID</TableCell>
+              <TableCell>Title</TableCell>
+              <TableCell>Type</TableCell>
+              <TableCell>Category</TableCell>
+              <TableCell>Price</TableCell>
+              <TableCell>Quantity</TableCell>
+              <TableCell>Actions</TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {products.map((product) => (
+              <TableRow key={product.id}>
+                <TableCell padding="checkbox">
+                  <Checkbox
+                    checked={selectedProducts.includes(product.id.toString())}
+                    onChange={(event) => handleSelectProduct(product.id.toString(), event.target.checked)}
+                  />
+                </TableCell>
+                <TableCell>{product.id}</TableCell>
+                <TableCell>{product.title}</TableCell>
+                <TableCell>
+                  <Chip
+                    label={product.mediaType}
+                    size="small"
+                    color="primary"
+                    variant="outlined"
+                  />
+                </TableCell>
+                <TableCell>{product.category}</TableCell>
+                <TableCell>{formatPrice(product.currentPrice)}</TableCell>
+                <TableCell>{product.quantity}</TableCell>
+                <TableCell>
+                  <IconButton
+                    color="primary"
+                    onClick={() => handleEditProduct(product)}
+                    size="small"
+                  >
+                    <EditIcon />
+                  </IconButton>
+                  <IconButton
+                    color="error"
+                    onClick={() => handleDeleteProduct(product.id.toString())}
+                    size="small"
+                  >
+                    <DeleteIcon />
+                  </IconButton>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </TableContainer>
 
-        {loading ? (
-          <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}>
-            <CircularProgress />
-          </Box>
-        ) : (
-          <>
-            {products.length === 0 ? (
-              <Box sx={{ py: 4, textAlign: "center" }}>
-                <Typography variant="body1" color="text.secondary">
-                  No products found.
-                </Typography>
-              </Box>
-            ) : (
-              <TableContainer>
-                <Table>
-                  <TableHead>
-                    <TableRow>
-                      <TableCell>Title</TableCell>
-                      <TableCell>Type</TableCell>
-                      <TableCell>Category</TableCell>
-                      <TableCell>Price</TableCell>
-                      <TableCell>Quantity</TableCell>
-                      <TableCell align="right">Actions</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {products.map((product) => (
-                      <TableRow key={product.id}>
-                        <TableCell>{product.title}</TableCell>
-                        <TableCell>
-                          {getMediaTypeLabel(product.mediaType)}
-                        </TableCell>
-                        <TableCell>{product.category}</TableCell>
-                        <TableCell>
-                          {formatPrice(product.currentPrice)}
-                        </TableCell>
-                        <TableCell>{product.quantity}</TableCell>
-                        <TableCell align="right">
-                          <IconButton
-                            color="primary"
-                            onClick={() => handleEditProduct(product)}
-                          >
-                            <EditIcon />
-                          </IconButton>
-                          <IconButton
-                            color="error"
-                            onClick={() => handleDeleteClick(product)}
-                          >
-                            <DeleteIcon />
-                          </IconButton>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-            )}
+      {/* Pagination */}
+      <Box sx={{ display: "flex", justifyContent: "center", mt: 3 }}>
+        <Pagination
+          count={totalPages}
+          page={page}
+          onChange={handlePageChange}
+          color="primary"
+        />
+      </Box>
 
-            <Box sx={{ display: "flex", justifyContent: "center", mt: 3 }}>
-              <Pagination
-                count={totalPages}
-                page={page}
-                onChange={handlePageChange}
-                color="primary"
-              />
-            </Box>
-          </>
-        )}
-      </Paper>
-
-      {/* Product Form Dialog */}
+      {/* Add/Edit Product Dialog */}
       <Dialog
         open={openProductDialog}
         onClose={() => setOpenProductDialog(false)}
@@ -483,211 +577,340 @@ const ProductManagementPage: React.FC = () => {
       >
         <DialogTitle>{dialogTitle}</DialogTitle>
         <DialogContent>
-          <Box component="form" sx={{ mt: 2 }}>
-            <Box sx={{ mb: 2 }}>
-              <TextField
-                name="title"
-                label="Product Title"
-                fullWidth
-                required
-                value={formData.title}
-                onChange={handleInputChange}
-                error={!!formErrors.title}
-                helperText={formErrors.title}
-              />
-            </Box>
+          <Box sx={{ pt: 1 }}>
+            {/* Basic Product Information */}
+            <TextField
+              fullWidth
+              label="Title *"
+              value={formData.title}
+              onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+              margin="normal"
+              required
+            />
 
-            <Box sx={{ mb: 2 }}>
-              <TextField
-                name="productDescription"
-                label="Description"
-                fullWidth
-                multiline
-                rows={3}
-                value={formData.productDescription}
-                onChange={handleInputChange}
-              />
-            </Box>
+            <FormControl fullWidth margin="normal" required>
+              <InputLabel>Media Type *</InputLabel>
+              <Select
+                value={formData.mediaType}
+                onChange={(e) => setFormData({ ...formData, mediaType: e.target.value })}
+                label="Media Type *"
+              >
+                <MenuItem value="BOOK">Book</MenuItem>
+                <MenuItem value="CD">CD</MenuItem>
+                <MenuItem value="LP">LP</MenuItem>
+                <MenuItem value="DVD">DVD</MenuItem>
+              </Select>
+            </FormControl>
 
-            <Box sx={{ display: "flex", gap: 2, mb: 2 }}>
-              <TextField
-                name="currentPrice"
-                label="Price (VND)"
-                required
-                value={formData.currentPrice}
-                onChange={handleInputChange}
-                error={!!formErrors.currentPrice}
-                helperText={formErrors.currentPrice}
-                type="number"
-                InputProps={{ inputProps: { min: 0 } }}
-                sx={{ flex: 1 }}
-              />
+            <TextField
+              fullWidth
+              label="Category *"
+              value={formData.category}
+              onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+              margin="normal"
+              required
+            />
 
-              <TextField
-                name="value"
-                label="Value (Cost Price)"
-                required
-                value={formData.value}
-                onChange={handleInputChange}
-                error={!!formErrors.value}
-                helperText={formErrors.value}
-                type="number"
-                InputProps={{ inputProps: { min: 0 } }}
-                sx={{ flex: 1 }}
-              />
-            </Box>
+            <TextField
+              fullWidth
+              label="Value *"
+              type="number"
+              value={formData.value}
+              onChange={(e) => setFormData({ ...formData, value: e.target.value })}
+              margin="normal"
+              required
+            />
 
-            <Box sx={{ display: "flex", gap: 2, mb: 2 }}>
-              <TextField
-                name="quantity"
-                label="Quantity"
-                required
-                value={formData.quantity}
-                onChange={handleInputChange}
-                error={!!formErrors.quantity}
-                helperText={formErrors.quantity}
-                type="number"
-                InputProps={{ inputProps: { min: 0 } }}
-                sx={{ flex: 1 }}
-              />
+            <TextField
+              fullWidth
+              label="Current Price *"
+              type="number"
+              value={formData.currentPrice}
+              onChange={(e) => setFormData({ ...formData, currentPrice: e.target.value })}
+              margin="normal"
+              required
+            />
 
-              <TextField
-                name="category"
-                label="Category"
-                required
-                value={formData.category}
-                onChange={handleInputChange}
-                error={!!formErrors.category}
-                helperText={formErrors.category}
-                sx={{ flex: 1 }}
-              />
-            </Box>
+            <TextField
+              fullWidth
+              label="Quantity *"
+              type="number"
+              value={formData.quantity}
+              onChange={(e) => setFormData({ ...formData, quantity: e.target.value })}
+              margin="normal"
+              required
+            />
 
-            <Box sx={{ display: "flex", gap: 2, mb: 2 }}>
-              <TextField
-                name="genre"
-                label="Genre"
-                value={formData.genre}
-                onChange={handleInputChange}
-                sx={{ flex: 1 }}
-              />
+            <TextField
+              fullWidth
+              label="Barcode *"
+              value={formData.barcode}
+              onChange={(e) => setFormData({ ...formData, barcode: e.target.value })}
+              margin="normal"
+              required
+            />
 
-              <TextField
-                name="barcode"
-                label="Barcode"
-                value={formData.barcode}
-                onChange={handleInputChange}
-                sx={{ flex: 1 }}
-              />
-            </Box>
+            <TextField
+              fullWidth
+              label="Product Description"
+              value={formData.productDescription}
+              onChange={(e) => setFormData({ ...formData, productDescription: e.target.value })}
+              margin="normal"
+              multiline
+              rows={3}
+            />
 
-            <Box sx={{ display: "flex", gap: 2, mb: 2 }}>
-              <TextField
-                name="productDimensions"
-                label="Dimensions"
-                value={formData.productDimensions}
-                onChange={handleInputChange}
-                sx={{ flex: 1 }}
-              />
+            <TextField
+              fullWidth
+              label="Product Dimensions *"
+              value={formData.productDimensions}
+              onChange={(e) => setFormData({ ...formData, productDimensions: e.target.value })}
+              margin="normal"
+              required
+            />
 
-              <TextField
-                name="weight"
-                label="Weight (kg)"
-                value={formData.weight}
-                onChange={handleInputChange}
-                error={!!formErrors.weight}
-                helperText={formErrors.weight}
-                type="number"
-                InputProps={{ inputProps: { min: 0, step: 0.01 } }}
-                sx={{ flex: 1 }}
-              />
+            <TextField
+              fullWidth
+              label="Weight *"
+              type="number"
+              value={formData.weight}
+              onChange={(e) => setFormData({ ...formData, weight: e.target.value })}
+              margin="normal"
+              required
+            />
 
-              <TextField
-                name="warehouseEntryDate"
-                label="Warehouse Entry Date"
-                type="date"
-                value={formData.warehouseEntryDate}
-                onChange={handleInputChange}
-                InputLabelProps={{ shrink: true }}
-                sx={{ flex: 1 }}
-              />
-            </Box>
+            <TextField
+              fullWidth
+              label="Image URL *"
+              value={formData.imageURL}
+              onChange={(e) => setFormData({ ...formData, imageURL: e.target.value })}
+              margin="normal"
+              required
+            />
 
-            <Box sx={{ display: "flex", alignItems: "center", mb: 2 }}>
-              <FormControlLabel
-                control={
-                  <Checkbox
-                    checked={formData.rushOrderEligible}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        rushOrderEligible: e.target.checked,
-                      })
-                    }
-                    name="rushOrderEligible"
-                  />
-                }
-                label="Eligible for Rush Order"
-              />
-            </Box>
+            <TextField
+              fullWidth
+              label="Warehouse Entry Date *"
+              type="date"
+              value={formData.warehouseEntryDate}
+              onChange={(e) => setFormData({ ...formData, warehouseEntryDate: e.target.value })}
+              margin="normal"
+              required
+              InputLabelProps={{ shrink: true }}
+            />
 
-            <Box sx={{ mb: 2 }}>
-              <TextField
-                name="imageURL"
-                label="Image URL"
-                fullWidth
-                value={formData.imageURL}
-                onChange={handleInputChange}
-              />
-            </Box>
+            <TextField
+              fullWidth
+              label="Genre"
+              value={formData.genre}
+              onChange={(e) => setFormData({ ...formData, genre: e.target.value })}
+              margin="normal"
+            />
+
+            {/* Media-Specific Fields */}
+            {formData.mediaType === 'BOOK' && (
+              <>
+                <TextField
+                  fullWidth
+                  label="Author *"
+                  value={formData.author || ''}
+                  onChange={(e) => setFormData({ ...formData, author: e.target.value })}
+                  margin="normal"
+                  required
+                  error={!!errors.author}
+                  helperText={errors.author}
+                />
+                <FormControl fullWidth margin="normal" required error={!!errors.coverType}>
+                  <InputLabel>Cover Type *</InputLabel>
+                  <Select
+                    value={formData.coverType || ''}
+                    onChange={(e) => setFormData({ ...formData, coverType: e.target.value as CoverType })}
+                    label="Cover Type *"
+                  >
+                    <MenuItem value="PAPERBACK">Paperback</MenuItem>
+                    <MenuItem value="HARDCOVER">Hardcover</MenuItem>
+                  </Select>
+                  {errors.coverType && <FormHelperText>{errors.coverType}</FormHelperText>}
+                </FormControl>
+                <TextField
+                  fullWidth
+                  label="Publisher *"
+                  value={formData.publisher || ''}
+                  onChange={(e) => setFormData({ ...formData, publisher: e.target.value })}
+                  margin="normal"
+                  required
+                  error={!!errors.publisher}
+                  helperText={errors.publisher}
+                />
+                <TextField
+                  fullWidth
+                  label="Publication Date *"
+                  type="date"
+                  value={formData.publicationDate || ''}
+                  onChange={(e) => setFormData({ ...formData, publicationDate: e.target.value })}
+                  margin="normal"
+                  required
+                  InputLabelProps={{ shrink: true }}
+                  error={!!errors.publicationDate}
+                  helperText={errors.publicationDate}
+                />
+                <TextField
+                  fullWidth
+                  label="Number of Pages *"
+                  type="number"
+                  value={formData.numberOfPage || ''}
+                  onChange={(e) => setFormData({ ...formData, numberOfPage: e.target.value })}
+                  margin="normal"
+                  required
+                  error={!!errors.numberOfPage}
+                  helperText={errors.numberOfPage}
+                />
+                <TextField
+                  fullWidth
+                  label="Language *"
+                  value={formData.language || ''}
+                  onChange={(e) => setFormData({ ...formData, language: e.target.value })}
+                  margin="normal"
+                  required
+                  error={!!errors.language}
+                  helperText={errors.language}
+                />
+              </>
+            )}
+
+            {(formData.mediaType === 'CD' || formData.mediaType === 'LP') && (
+              <>
+                <TextField
+                  fullWidth
+                  label="Artist *"
+                  value={formData.artist || ''}
+                  onChange={(e) => setFormData({ ...formData, artist: e.target.value })}
+                  margin="normal"
+                  required
+                  error={!!errors.artist}
+                  helperText={errors.artist}
+                />
+                <TextField
+                  fullWidth
+                  label="Album *"
+                  value={formData.album || ''}
+                  onChange={(e) => setFormData({ ...formData, album: e.target.value })}
+                  margin="normal"
+                  required
+                  error={!!errors.album}
+                  helperText={errors.album}
+                />
+                <TextField
+                  fullWidth
+                  label="Record Label *"
+                  value={formData.recordLabel || ''}
+                  onChange={(e) => setFormData({ ...formData, recordLabel: e.target.value })}
+                  margin="normal"
+                  required
+                  error={!!errors.recordLabel}
+                  helperText={errors.recordLabel}
+                />
+                <TextField
+                  fullWidth
+                  label="Tracklist *"
+                  value={formData.tracklist || ''}
+                  onChange={(e) => setFormData({ ...formData, tracklist: e.target.value })}
+                  margin="normal"
+                  multiline
+                  rows={3}
+                  required
+                  error={!!errors.tracklist}
+                  helperText={errors.tracklist}
+                />
+                <TextField
+                  fullWidth
+                  label="Release Date"
+                  type="date"
+                  value={formData.releaseDate || ''}
+                  onChange={(e) => setFormData({ ...formData, releaseDate: e.target.value })}
+                  margin="normal"
+                  InputLabelProps={{ shrink: true }}
+                />
+              </>
+            )}
+
+            {formData.mediaType === 'DVD' && (
+              <>
+                <TextField
+                  fullWidth
+                  label="Director *"
+                  value={formData.director || ''}
+                  onChange={(e) => setFormData({ ...formData, director: e.target.value })}
+                  margin="normal"
+                  required
+                  error={!!errors.director}
+                  helperText={errors.director}
+                />
+                <TextField
+                  fullWidth
+                  label="Studio *"
+                  value={formData.studio || ''}
+                  onChange={(e) => setFormData({ ...formData, studio: e.target.value })}
+                  margin="normal"
+                  required
+                  error={!!errors.studio}
+                  helperText={errors.studio}
+                />
+                <TextField
+                  fullWidth
+                  label="Runtime *"
+                  value={formData.runtime || ''}
+                  onChange={(e) => setFormData({ ...formData, runtime: e.target.value })}
+                  margin="normal"
+                  required
+                  placeholder="e.g., 2h 30m"
+                  error={!!errors.runtime}
+                  helperText={errors.runtime}
+                />
+                <FormControl fullWidth margin="normal" required error={!!errors.discType}>
+                  <InputLabel>Disc Type *</InputLabel>
+                  <Select
+                    value={formData.discType || ''}
+                    onChange={(e) => setFormData({ ...formData, discType: e.target.value as DiscType })}
+                    label="Disc Type *"
+                  >
+                    <MenuItem value="BLURAY">Blu-ray</MenuItem>
+                    <MenuItem value="HDDVD">HD-DVD</MenuItem>
+                    <MenuItem value="DVD">DVD</MenuItem>
+                  </Select>
+                  {errors.discType && <FormHelperText>{errors.discType}</FormHelperText>}
+                </FormControl>
+                <TextField
+                  fullWidth
+                  label="Language *"
+                  value={formData.language || ''}
+                  onChange={(e) => setFormData({ ...formData, language: e.target.value })}
+                  margin="normal"
+                  required
+                  error={!!errors.language}
+                  helperText={errors.language}
+                />
+                <TextField
+                  fullWidth
+                  label="Subtitles"
+                  value={formData.subtitle || ''}
+                  onChange={(e) => setFormData({ ...formData, subtitle: e.target.value })}
+                  margin="normal"
+                  placeholder="e.g., English, Spanish, French"
+                />
+              </>
+            )}
           </Box>
         </DialogContent>
         <DialogActions>
+          <Button onClick={() => setOpenProductDialog(false)}>Cancel</Button>
           <Button
-            onClick={() => setOpenProductDialog(false)}
-            disabled={formSubmitting}
-          >
-            Cancel
-          </Button>
-          <Button
-            onClick={handleSubmit}
             variant="contained"
-            color="primary"
-            disabled={formSubmitting}
+            onClick={handleSaveProduct}
+            disabled={saving}
+            startIcon={saving ? <CircularProgress size={20} /> : null}
           >
-            {formSubmitting ? <CircularProgress size={24} /> : "Save"}
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* Delete Confirmation Dialog */}
-      <Dialog
-        open={openDeleteDialog}
-        onClose={() => setOpenDeleteDialog(false)}
-      >
-        <DialogTitle>Confirm Deletion</DialogTitle>
-        <DialogContent>
-          <DialogContentText>
-            Are you sure you want to delete "{productToDelete?.title}"? This
-            action cannot be undone.
-          </DialogContentText>
-        </DialogContent>
-        <DialogActions>
-          <Button
-            onClick={() => setOpenDeleteDialog(false)}
-            disabled={deleteLoading}
-          >
-            Cancel
-          </Button>
-          <Button
-            onClick={handleDeleteConfirm}
-            color="error"
-            disabled={deleteLoading}
-            startIcon={
-              deleteLoading ? <CircularProgress size={20} /> : <DeleteIcon />
-            }
-          >
-            Delete
+            {saving ? "Saving..." : selectedProduct ? "Update" : "Add"}
           </Button>
         </DialogActions>
       </Dialog>
