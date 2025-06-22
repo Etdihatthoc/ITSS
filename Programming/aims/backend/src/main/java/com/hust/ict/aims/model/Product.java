@@ -9,6 +9,7 @@ import jakarta.persistence.*;
 @Entity
 @Inheritance(strategy = InheritanceType.JOINED)
 @DiscriminatorColumn(name = "product_type", discriminatorType = DiscriminatorType.STRING)
+@DiscriminatorValue("PRODUCT")
 @Table(name = "product")
 public class Product {
 
@@ -16,6 +17,9 @@ public class Product {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "product_id")
     private Long id;
+
+    @Column(name = "product_type", insertable = false, updatable = false) // Add this
+    private String productType;
 
     @Column(nullable = false)
     private String imageURL;
@@ -166,5 +170,20 @@ public class Product {
 
     public void setGenre(String genre) {
         this.genre = genre;
+    }
+
+    @PostLoad
+    @PostPersist
+    @PostUpdate
+    protected void updateProductType() {
+        if (this instanceof Book) {
+            this.productType = "BOOK";
+        } else if (this instanceof CD) {
+            this.productType = "CD";
+        } else if (this instanceof LP) {
+            this.productType = "LP";
+        } else if (this instanceof DVD) {
+            this.productType = "DVD";
+        }
     }
 }

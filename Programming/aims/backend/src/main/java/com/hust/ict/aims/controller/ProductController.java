@@ -3,10 +3,12 @@ package com.hust.ict.aims.controller;
 import com.hust.ict.aims.dto.*;
 import com.hust.ict.aims.exception.ProductNotFoundException;
 import com.hust.ict.aims.model.*;
-import com.hust.ict.aims.model.Operation;
 import com.hust.ict.aims.repository.ProductRepository;
 import com.hust.ict.aims.service.OperationService;
 import com.hust.ict.aims.service.ProductService;
+import com.hust.ict.aims.service.ProductValidationService;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -16,6 +18,8 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
+import com.hust.ict.aims.service.BusinessRuleValidator;
+import com.hust.ict.aims.factory.ProductFactory;
 
 @RestController
 @RequestMapping("/api/products")
@@ -24,29 +28,68 @@ public class ProductController {
 
     private final ProductService productService;
     private final OperationService operationService;
+    private final BusinessRuleValidator businessRuleValidator; // Change to final
+    private final ProductFactory productFactory; // Change to final
 
     public ProductController(ProductService productService,
-                             OperationService operationService) {
+                             OperationService operationService,
+                             BusinessRuleValidator businessRuleValidator,
+                             ProductFactory productFactory) {
         this.productService = productService;
         this.operationService = operationService;
+        this.businessRuleValidator = businessRuleValidator;
+        this.productFactory = productFactory;
     }
 
     @PostMapping
-    public Product save(@RequestBody Product product) {
-        // 1. Kiểm tra tính hợp lệ của thông tin sản phẩm
-        validateProductInformation(product);
+    public ResponseEntity<?> save(@RequestBody Product product) {
+        try {
+            // Check daily limits for adds
+            if (!businessRuleValidator.canExecuteOperation(null, "ADD_PRODUCT")) {
+                return ResponseEntity.badRequest()
+                        .body(businessRuleValidator.getFailureReason("ADD_PRODUCT"));
+            }
 
-        // 2. Lưu sản phẩm
-        Product saved = productService.save(product);
+            validateProductInformation(product);
+            Product saved = productService.save(product);
 
-        // 3. Ghi lại thao tác thêm sản phẩm
-        Operation op = new Operation();
-        op.setProduct(saved);
-        op.setOperationType("ADD_PRODUCT");
-        op.setTimestamp(LocalDateTime.now());
-        operationService.save(op);
+            Operation op = new Operation();
+            op.setProduct(saved);
+            op.setOperationType("ADD_PRODUCT");
+            op.setTimestamp(LocalDateTime.now());
+            operationService.save(op);
 
-        return saved;
+            return ResponseEntity.ok(saved);
+        } catch (ResponseStatusException e) {
+            return ResponseEntity.status(e.getStatusCode()).body(e.getReason());
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body("Error creating product: " + e.getMessage());
+        }
+    }
+
+    // Add new endpoint for creating products with factory
+    @PostMapping("/create")
+    public ResponseEntity<?> createProduct(@RequestBody ProductCreateRequest request) {
+        try {
+            if (!businessRuleValidator.canExecuteOperation(null, "ADD_PRODUCT")) {
+                return ResponseEntity.badRequest()
+                        .body(businessRuleValidator.getFailureReason("ADD_PRODUCT"));
+            }
+
+            Product product = productFactory.createProduct(request);
+            validateProductInformation(product);
+            Product saved = productService.save(product);
+
+            Operation op = new Operation();
+            op.setProduct(saved);
+            op.setOperationType("ADD_PRODUCT");
+            op.setTimestamp(LocalDateTime.now());
+            operationService.save(op);
+
+            return ResponseEntity.ok(saved);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body("Error creating product: " + e.getMessage());
+        }
     }
 
     // Phương thức kiểm tra tính hợp lệ của thông tin sản phẩm
@@ -137,39 +180,43 @@ public class ProductController {
 //    }
 
     @PutMapping("/{id}")
-    public Product update(@PathVariable Long id, @RequestBody Product product) {
-        // 1. Kiểm tra sản phẩm hiện tại
-        Product existingProduct = productService.findById(id);
-        if (existingProduct == null) {
-            throw new ResponseStatusException(
-                    HttpStatus.NOT_FOUND, "Product with ID " + id + " not found"
-            );
+    public ResponseEntity<?> update(@PathVariable Long id, @RequestBody Product product) {
+        try {
+            // Check if product exists
+            Product existingProduct = productService.findById(id);
+            if (existingProduct == null) {
+                return ResponseEntity.notFound().build();
+            }
+
+            // Check daily limits for updates
+            if (!businessRuleValidator.canExecuteOperation(id, "UPDATE_PRODUCT")) {
+                return ResponseEntity.badRequest()
+                        .body(businessRuleValidator.getFailureReason("UPDATE_PRODUCT"));
+            }
+
+            validateProductInformation(product);
+
+            // Check price update rules
+            if (existingProduct.getCurrentPrice() != product.getCurrentPrice()) {
+                validatePriceRange(product.getValue(), product.getCurrentPrice());
+                validatePriceUpdateFrequency(id);
+            }
+
+            product.setId(id);
+            Product updated = productService.save(product);
+
+            Operation op = new Operation();
+            op.setProduct(updated);
+            op.setOperationType("UPDATE_PRODUCT");
+            op.setTimestamp(LocalDateTime.now());
+            operationService.save(op);
+
+            return ResponseEntity.ok(updated);
+        } catch (ResponseStatusException e) {
+            return ResponseEntity.status(e.getStatusCode()).body(e.getReason());
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body("Error updating product: " + e.getMessage());
         }
-
-        // 2. Kiểm tra tính hợp lệ của thông tin sản phẩm
-        validateProductInformation(product);
-
-        // 3. Kiểm tra nếu giá sản phẩm được cập nhật
-        if (existingProduct.getCurrentPrice() != product.getCurrentPrice()) {
-            // 3.1 Kiểm tra giá mới có nằm trong phạm vi cho phép không
-            validatePriceRange(product.getValue(), product.getCurrentPrice());
-
-            // 3.2 Kiểm tra số lần cập nhật giá trong ngày
-            validatePriceUpdateFrequency(id);
-        }
-
-        // 4. Thực hiện cập nhật
-        product.setId(id);  // Đảm bảo ID được thiết lập
-        Product updated = productService.save(product);
-
-        // 5. Ghi lại thao tác cập nhật sản phẩm
-        Operation op = new Operation();
-        op.setProduct(updated);
-        op.setOperationType("UPDATE_PRODUCT");
-        op.setTimestamp(LocalDateTime.now());
-        operationService.save(op);
-
-        return updated;
     }
 
     // Kiểm tra giá mới có nằm trong khoảng 30%-150% của giá trị không
@@ -214,7 +261,6 @@ public class ProductController {
         op.setTimestamp(LocalDateTime.now());
         operationService.save(op);
     }
-
     @PostMapping("/check-inventory")
     public ResponseEntity<?> checkInventory(@RequestBody CartItemsRequest request) {
         List<OutOfStockProduct> outOfStockProducts = new ArrayList<>();
@@ -245,4 +291,5 @@ public class ProductController {
             );
         }
     }
+
 }
