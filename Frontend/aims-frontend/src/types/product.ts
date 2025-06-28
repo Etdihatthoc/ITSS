@@ -98,7 +98,47 @@ export interface ProductFilter {
   sortDirection?: "asc" | "desc";
 }
 
+// export interface ProductCreate {
+//   productType: string;
+//   title: string;
+//   category: string;
+//   value: number;
+//   currentPrice: number;
+//   productDescription?: string;
+//   barcode: string;
+//   quantity: number;
+//   warehouseEntryDate: string;
+//   productDimensions: string;
+//   weight: number;
+//   imageURL: string;
+//   rushOrderEligible?: boolean;
+//   genre: string;
+
+//   // Book specific properties - NOW REQUIRED for books
+//   author?: string;
+//   coverType?: string;
+//   publisher?: string;
+//   publicationDate?: string;
+//   numberOfPage?: number;
+//   language?: string;
+
+//   // CD/LP specific properties - NOW REQUIRED for CDs/LPs
+//   artist?: string;
+//   recordLabel?: string;
+//   tracklist?: string;
+//   album?: string;
+//   releaseDate?: string;
+
+//   // DVD specific properties - NOW REQUIRED for DVDs
+//   discType?: string;
+//   director?: string;
+//   runtime?: string;
+//   studio?: string;
+//   subtitle?: string;
+// }
+
 export interface ProductCreate {
+  // Use productType to match backend Jackson annotations
   productType: string;
   title: string;
   category: string;
@@ -112,9 +152,9 @@ export interface ProductCreate {
   weight: number;
   imageURL: string;
   rushOrderEligible?: boolean;
-  genre: string;
+  genre?: string;
 
-  // Book specific properties - NOW REQUIRED for books
+  // Book specific properties - match backend field names exactly
   author?: string;
   coverType?: string;
   publisher?: string;
@@ -122,20 +162,59 @@ export interface ProductCreate {
   numberOfPage?: number;
   language?: string;
 
-  // CD/LP specific properties - NOW REQUIRED for CDs/LPs
+  // CD/LP specific properties - match backend field names exactly
   artist?: string;
   recordLabel?: string;
   tracklist?: string;
   album?: string;
   releaseDate?: string;
 
-  // DVD specific properties - NOW REQUIRED for DVDs
+  // DVD specific properties - match backend field names exactly
   discType?: string;
   director?: string;
   runtime?: string;
   studio?: string;
   subtitle?: string;
 }
+
+// Helper function to convert frontend form data to backend format
+export const mapFormDataToProductCreate = (formData: any): ProductCreate => {
+  return {
+    productType: formData.mediaType, // Map mediaType to productType
+    title: formData.title,
+    category: formData.category,
+    value: parseFloat(formData.value),
+    currentPrice: parseFloat(formData.currentPrice),
+    productDescription: formData.productDescription,
+    barcode: formData.barcode,
+    quantity: parseInt(formData.quantity),
+    warehouseEntryDate: formData.warehouseEntryDate,
+    productDimensions: formData.productDimensions,
+    weight: parseFloat(formData.weight),
+    imageURL: formData.imageURL,
+    rushOrderEligible: formData.rushOrderEligible,
+    genre: formData.genre,
+    // Book fields
+    author: formData.author,
+    coverType: formData.coverType,
+    publisher: formData.publisher,
+    publicationDate: formData.publicationDate,
+    numberOfPage: formData.numberOfPage ? parseInt(formData.numberOfPage) : undefined,
+    language: formData.language,
+    // CD/LP fields
+    artist: formData.artist,
+    recordLabel: formData.recordLabel,
+    tracklist: formData.tracklist,
+    album: formData.album,
+    releaseDate: formData.releaseDate,
+    // DVD fields
+    discType: formData.discType,
+    director: formData.director,
+    runtime: formData.runtime,
+    studio: formData.studio,
+    subtitle: formData.subtitle,
+  };
+};
 
 // Interface for updating an existing product
 export interface ProductUpdate extends Partial<ProductCreate> {

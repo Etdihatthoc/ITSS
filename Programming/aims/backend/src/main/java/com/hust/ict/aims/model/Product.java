@@ -2,6 +2,8 @@ package com.hust.ict.aims.model;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 
+import com.fasterxml.jackson.annotation.JsonSubTypes;
+import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import jakarta.persistence.*;
 
 /* Cohesion Level: Functional Cohesion
@@ -12,6 +14,18 @@ import jakarta.persistence.*;
 @Inheritance(strategy = InheritanceType.JOINED)
 @DiscriminatorColumn(name = "product_type", discriminatorType = DiscriminatorType.STRING)
 @Table(name = "product")
+// Jackson annotations for polymorphic deserialization
+@JsonTypeInfo(
+        use = JsonTypeInfo.Id.NAME,
+        property = "productType",
+        visible = true
+)
+@JsonSubTypes({
+        @JsonSubTypes.Type(value = Book.class, name = "BOOK"),
+        @JsonSubTypes.Type(value = CD.class, name = "CD"),
+        @JsonSubTypes.Type(value = DVD.class, name = "DVD"),
+        @JsonSubTypes.Type(value = LP.class, name = "LP")
+})
 public class Product {
 
     @Id
@@ -61,6 +75,10 @@ public class Product {
     @Column(name = "deleted_at")
     private LocalDateTime deletedAt;
     
+    // Virtual field for JSON deserialization - not persisted to database
+    @Transient
+    private String productType;
+    
     public boolean isDeleted() {
         return deleted;
     }
@@ -75,6 +93,15 @@ public class Product {
 
     public void setDeletedAt(LocalDateTime deletedAt) {
         this.deletedAt = deletedAt;
+    }
+
+    // Virtual productType getter/setter for JSON binding
+    public String getProductType() {
+        return productType;
+    }
+
+    public void setProductType(String productType) {
+        this.productType = productType;
     }
 
     // Getters and Setters

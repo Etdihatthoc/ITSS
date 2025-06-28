@@ -27,6 +27,7 @@ import {
   InputLabel,
   MenuItem,
   Select,
+  FormControlLabel,
 } from "@mui/material";
 import {
   Add as AddIcon,
@@ -184,16 +185,60 @@ const ProductManagementPage: React.FC = () => {
     setOpenProductDialog(true);
   };
 
-  const handleEditProduct = (product: Product) => {
-    setDialogTitle("Edit Product");
-    setSelectedProduct(product);
+  // const handleEditProduct = (product: Product) => {
+  //   setDialogTitle("Edit Product");
+  //   setSelectedProduct(product);
 
+  //   setFormData({
+  //     title: product.title,
+  //     productDescription: product.productDescription || "",
+  //     currentPrice: product.currentPrice.toString(),
+  //     quantity: product.quantity.toString(),
+  //     category: product.category,
+  //     barcode: product.barcode || "",
+  //     productDimensions: product.productDimensions || "",
+  //     weight: product.weight ? product.weight.toString() : "",
+  //     imageURL: product.imageURL || "",
+  //     rushOrderEligible: product.rushOrderEligible || false,
+  //     genre: product.genre || "",
+  //     value: product.value ? product.value.toString() : "",
+  //     warehouseEntryDate: product.warehouseEntryDate ? product.warehouseEntryDate.split('T')[0] : new Date().toISOString().split('T')[0],
+  //     mediaType: product.mediaType,
+  //     // Book fields
+  //     author: (product as any).author || "",
+  //     coverType: (product as any).coverType,
+  //     publisher: (product as any).publisher || "",
+  //     publicationDate: (product as any).publicationDate || "",
+  //     numberOfPage: (product as any).numberOfPage?.toString() || "",
+  //     language: (product as any).language || "",
+  //     // CD/LP fields
+  //     artist: (product as any).artist || "",
+  //     album: (product as any).album || "",
+  //     recordLabel: (product as any).recordLabel || "",
+  //     tracklist: (product as any).tracklist || "",
+  //     releaseDate: (product as any).releaseDate || "",
+  //     // DVD fields
+  //     director: (product as any).director || "",
+  //     studio: (product as any).studio || "",
+  //     runtime: (product as any).runtime || "",
+  //     discType: (product as any).discType,
+  //     subtitle: (product as any).subtitle || "",
+  //   });
+  //   setOpenProductDialog(true);
+  // };
+  
+
+  const handleEditProduct = (product: Product) => {
+    setSelectedProduct(product);
+    setDialogTitle("Edit Product");
+    
+    // Map backend product data to frontend form format
     setFormData({
-      title: product.title,
+      title: product.title || "",
       productDescription: product.productDescription || "",
-      currentPrice: product.currentPrice.toString(),
-      quantity: product.quantity.toString(),
-      category: product.category,
+      currentPrice: product.currentPrice ? product.currentPrice.toString() : "",
+      quantity: product.quantity ? product.quantity.toString() : "",
+      category: product.category || "",
       barcode: product.barcode || "",
       productDimensions: product.productDimensions || "",
       weight: product.weight ? product.weight.toString() : "",
@@ -202,8 +247,9 @@ const ProductManagementPage: React.FC = () => {
       genre: product.genre || "",
       value: product.value ? product.value.toString() : "",
       warehouseEntryDate: product.warehouseEntryDate || "",
-      mediaType: product.mediaType || "BOOK",
-      // Book fields
+      // Map productType from backend to mediaType for frontend form
+      mediaType: product.productType || "BOOK",
+      // Book fields - type-safe access to media-specific properties
       author: (product as any).author || "",
       coverType: (product as any).coverType,
       publisher: (product as any).publisher || "",
@@ -300,13 +346,81 @@ const ProductManagementPage: React.FC = () => {
     }
   };
 
+  // const handleSaveProduct = async () => {
+  //   try {
+  //     setSaving(true);
+  //     setErrors({});
+      
+  //     const productData = {
+  //       ...formData,
+  //       currentPrice: parseFloat(formData.currentPrice),
+  //       quantity: parseInt(formData.quantity),
+  //       weight: parseFloat(formData.weight),
+  //       value: parseFloat(formData.value),
+  //       warehouseEntryDate: formData.warehouseEntryDate,
+  //       numberOfPage: formData.numberOfPage ? parseInt(formData.numberOfPage) : undefined,
+  //     };
+
+  //     if (selectedProduct) {
+  //       await productService.updateProduct(selectedProduct.id.toString(), productData);
+  //       toast.success("Product updated successfully");
+  //     } else {
+  //       await productService.addProduct(productData);
+  //       toast.success("Product added successfully");
+  //     }
+
+  //     setOpenProductDialog(false);
+  //     fetchProducts();
+  //     resetForm();
+  //   } catch (err: any) {
+  //     console.error("Failed to save product:", err);
+      
+  //     if (err.response?.status === 400) {
+  //       const errorMessage = err.response.data.message || err.response.data.error || "Validation failed";
+        
+  //       if (errorMessage.includes("author")) {
+  //         setErrors(prev => ({ ...prev, author: "Author is required for books" }));
+  //       }
+  //       if (errorMessage.includes("coverType")) {
+  //         setErrors(prev => ({ ...prev, coverType: "Cover type is required for books" }));
+  //       }
+  //       if (errorMessage.includes("publisher")) {
+  //         setErrors(prev => ({ ...prev, publisher: "Publisher is required for books" }));
+  //       }
+  //       if (errorMessage.includes("artist")) {
+  //         setErrors(prev => ({ ...prev, artist: "Artist is required for CDs/LPs" }));
+  //       }
+  //       if (errorMessage.includes("director")) {
+  //         setErrors(prev => ({ ...prev, director: "Director is required for DVDs" }));
+  //       }
+  //       if (errorMessage.includes("daily limit")) {
+  //         toast.error("Daily operation limit exceeded. Cannot perform more operations today.");
+  //       } else if (errorMessage.includes("price more than 2 times")) {
+  //         toast.error("Cannot update product price more than 2 times per day");
+  //       } else {
+  //         toast.error(errorMessage);
+  //       }
+  //     } else if (err.response?.status === 409) {
+  //       toast.error("Another operation is in progress. Please try again later.");
+  //     } else {
+  //       toast.error("Failed to save product");
+  //     }
+  //   } finally {
+  //     setSaving(false);
+  //   }
+  // };
+
+
   const handleSaveProduct = async () => {
     try {
       setSaving(true);
       setErrors({});
       
+      // Map the frontend formData to backend-compatible format
       const productData = {
         ...formData,
+        // Map mediaType to productType for backend compatibility
+        productType: formData.mediaType,
         currentPrice: parseFloat(formData.currentPrice),
         quantity: parseInt(formData.quantity),
         weight: parseFloat(formData.weight),
@@ -314,6 +428,9 @@ const ProductManagementPage: React.FC = () => {
         warehouseEntryDate: formData.warehouseEntryDate,
         numberOfPage: formData.numberOfPage ? parseInt(formData.numberOfPage) : undefined,
       };
+
+      // Remove the frontend-specific mediaType field before sending to backend
+      delete (productData as any).mediaType;
 
       if (selectedProduct) {
         await productService.updateProduct(selectedProduct.id.toString(), productData);
@@ -778,7 +895,7 @@ const ProductManagementPage: React.FC = () => {
                 <TableCell>{product.title}</TableCell>
                 <TableCell>
                   <Chip
-                    label={product.mediaType}
+                    label={product.productType}
                     size="small"
                     color="primary"
                     variant="outlined"
@@ -950,6 +1067,23 @@ const ProductManagementPage: React.FC = () => {
               required
               placeholder="https://example.com/product-image.jpg"
             />
+
+            {/* Rush Order Eligibility */}
+            <Box sx={{ mt: 2 }}>
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={formData.rushOrderEligible}
+                    onChange={(e) => setFormData({ ...formData, rushOrderEligible: e.target.checked })}
+                    color="primary"
+                  />
+                }
+                label="Rush Order Eligible (Hỗ trợ giao hàng nhanh)"
+              />
+              <Typography variant="caption" color="text.secondary" sx={{ ml: 4, display: 'block' }}>
+                Sản phẩm này có thể được giao hàng nhanh với phí bổ sung 10,000 VND
+              </Typography>
+            </Box>
 
             {/* Warehouse Entry Date and Genre - Side by side */}
             <Box sx={{ display: 'flex', gap: 2, mt: 2 }}>

@@ -58,8 +58,7 @@ public interface OperationRepository extends JpaRepository<Operation, Long> {
            "ORDER BY o.timestamp DESC")
     Page<Operation> findOperationsWithFilters(
             @Param("search") String search,
-            @Param("operationType") String operationType,
-            Pageable pageable);
+            @Param("operationType") String operationType, Pageable pageable);
     
     // Delete operations by product ID (useful for cascade deletes)
     @Query("DELETE FROM Operation o WHERE o.product.id = :productId")

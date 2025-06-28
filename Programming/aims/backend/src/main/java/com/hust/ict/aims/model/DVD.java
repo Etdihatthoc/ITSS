@@ -1,7 +1,9 @@
 package com.hust.ict.aims.model;
 
+import com.fasterxml.jackson.annotation.JsonTypeName;
 import jakarta.persistence.*;
 import java.time.LocalDate;
+
 /*
 * Cohesion Level: Functional Cohesion
 * Similarly demonstrates functional cohesion, with all members focused on representing a DVD. The release date, subtitle, language, studio, runtime, disc type, and director all support this single purpose.
@@ -9,7 +11,7 @@ import java.time.LocalDate;
 @Entity
 @Table(name = "dvd")
 @DiscriminatorValue("DVD")
-
+@JsonTypeName("DVD")
 public class DVD extends Product {
     @Column(name = "releaseDate", nullable = true)
     private LocalDate releaseDate;

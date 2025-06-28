@@ -35,6 +35,7 @@ interface PaymentSummary {
   subtotal: number;
   tax: number;
   deliveryFee: number;
+  rushDeliveryFee?: number;
   total: number;
 }
 
@@ -93,6 +94,7 @@ const PaymentPage: React.FC = () => {
         subtotal: result.subtotal,
         tax: result.tax,
         deliveryFee: result.deliveryFee,
+        rushDeliveryFee: result.rushDeliveryFee,
         total: result.total,
       });
 
@@ -421,6 +423,19 @@ const PaymentPage: React.FC = () => {
                 {formatPrice(paymentSummary?.deliveryFee || 0)}
               </Typography>
             </Box>
+
+            {deliveryInfo.isRushOrder && (
+              <Box
+                sx={{ display: "flex", justifyContent: "space-between", mb: 1 }}
+              >
+                <Typography variant="body1" color="primary">
+                  Rush Delivery Fee:
+                </Typography>
+                <Typography variant="body1" color="primary">
+                  {formatPrice(paymentSummary?.rushDeliveryFee || 0)}
+                </Typography>
+              </Box>
+            )}
 
             <Divider sx={{ my: 2 }} />
 

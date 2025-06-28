@@ -1,7 +1,9 @@
 package com.hust.ict.aims.model;
 
+import com.fasterxml.jackson.annotation.JsonTypeName;
 import jakarta.persistence.*;
 import java.time.LocalDate;
+
 /*
 * Cohesion Level: Functional Cohesion
 * Similarly demonstrates functional cohesion, with all members focused on representing a book. The author, cover type, publisher, language, number of pages, and publication date all support this single purpose.
@@ -9,7 +11,7 @@ import java.time.LocalDate;
 @Entity
 @Table(name = "book")
 @DiscriminatorValue("BOOK")
-
+@JsonTypeName("BOOK")
 public class Book extends Product {
 
     @Column(name = "author", nullable = false)
@@ -77,4 +79,3 @@ public class Book extends Product {
         this.genre = genre;
     }
 }
-

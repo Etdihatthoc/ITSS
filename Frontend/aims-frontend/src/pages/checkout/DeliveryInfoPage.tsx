@@ -15,12 +15,15 @@ import {
   CircularProgress,
 } from "@mui/material";
 import { useCart } from "../../contexts/CartContext";
+import rushOrderService from "../../services/RushOrderService";
+import cartService from "../../services/cartService";
 
 interface DeliveryFormData {
   recipientName: string;
   email: string;
   phone: string;
   province: string;
+  district: string;
   address: string;
   isRushOrder: boolean;
   rushDeliveryTime: string;
@@ -43,12 +46,18 @@ const DeliveryInfoPage: React.FC = () => {
   const [deliveryFee, setDeliveryFee] = useState(15000); // Default delivery fee
   const [rushDeliveryEligible, setRushDeliveryEligible] = useState(false);
   const [errors, setErrors] = useState<FormErrors>({});
+  const [rushEligibilityChecked, setRushEligibilityChecked] = useState(false);
+  const [rushEligibilityError, setRushEligibilityError] = useState<string | null>(null);
+  const [subtotal, setSubtotal] = useState(0);
+  const [tax, setTax] = useState(0);
+  const [total, setTotal] = useState(0);
 
   const [formData, setFormData] = useState<DeliveryFormData>({
     recipientName: "",
     email: "",
     phone: "",
     province: "",
+    district: "",
     address: "",
     isRushOrder: false,
     rushDeliveryTime: "",
@@ -172,6 +181,71 @@ const DeliveryInfoPage: React.FC = () => {
     // Recalculate delivery fee when rush order changes
     if (name === "isRushOrder") {
       calculateDeliveryFee();
+    }
+  };
+
+  const handleRushOrderChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const checked = e.target.checked;
+    setRushEligibilityError(null);
+    if (checked) {
+      setLoading(true);
+      try {
+        // Map cartRequestDTO từ cart context
+        const cartRequestDTO = cart
+          ? {
+              cartId: cart.cartId,
+              totalProductPriceBeforeVAT: cart.totalProductPriceBeforeVAT,
+              items: cart.items.map((item) => ({
+                productId: item.product.id,
+                quantity: item.quantity,
+              })),
+            }
+          : undefined;
+        // Map deliveryInfoDTO từ formData
+        const deliveryInfoDTO = {
+          deliveryAddress: formData.address,
+          province: formData.province,
+          phoneNumber: formData.phone,
+          recipientName: formData.recipientName,
+          email: formData.email,
+          district: formData.district,
+        };
+        await rushOrderService.checkEligibility({
+          cartRequestDTO,
+          deliveryInfoDTO,
+        });
+        // Gọi lại API tính giá tiền
+        if (cart) {
+          const items = cart.items.map((item) => ({
+            productId: item.product.id,
+            quantity: item.quantity,
+          }));
+          const isRushDelivery = true; // Đảm bảo luôn true sau khi checkEligibility thành công
+          const calc = await cartService.calculateCart(
+            items,
+            isRushDelivery,
+            formData.province
+          );
+          setSubtotal(calc.subtotal);
+          setTax(calc.tax);
+          setDeliveryFee(calc.deliveryFee);
+          setTotal(calc.total);
+        }
+        setFormData({ ...formData, isRushOrder: true });
+        setRushEligibilityChecked(true);
+      } catch (error: any) {
+        setRushEligibilityError(
+          error?.response?.data?.message ||
+            "Địa chỉ hoặc sản phẩm trong giỏ hàng không hỗ trợ giao hàng nhanh."
+        );
+        setFormData({ ...formData, isRushOrder: false });
+        setRushEligibilityChecked(false);
+      } finally {
+        setLoading(false);
+      }
+    } else {
+      setFormData({ ...formData, isRushOrder: false });
+      setRushEligibilityChecked(false);
     }
   };
 
@@ -340,6 +414,15 @@ const DeliveryInfoPage: React.FC = () => {
                   />
 
                   <TextField
+                    name="district"
+                    label="District (Quận/Huyện)"
+                    required
+                    value={formData.district}
+                    onChange={handleInputChange}
+                    sx={{ mt: 2 }}
+                  />
+
+                  <TextField
                     name="address"
                     label="Delivery Address"
                     fullWidth
@@ -366,7 +449,7 @@ const DeliveryInfoPage: React.FC = () => {
                     <Checkbox
                       name="isRushOrder"
                       checked={formData.isRushOrder}
-                      onChange={handleInputChange}
+                      onChange={handleRushOrderChange}
                       disabled={!rushDeliveryEligible}
                     />
                   }
@@ -379,7 +462,11 @@ const DeliveryInfoPage: React.FC = () => {
                   </Alert>
                 )}
 
-                {formData.isRushOrder && (
+                {rushEligibilityError && (
+                  <Alert severity="error" sx={{ mt: 1 }}>{rushEligibilityError}</Alert>
+                )}
+
+                {formData.isRushOrder && rushEligibilityChecked && (
                   <Box
                     sx={{
                       mt: 2,
@@ -400,7 +487,6 @@ const DeliveryInfoPage: React.FC = () => {
                         shrink: true,
                       }}
                     />
-
                     <TextField
                       name="rushDeliveryInstructions"
                       label="Delivery Instructions"
@@ -450,23 +536,30 @@ const DeliveryInfoPage: React.FC = () => {
             </Typography>
 
             <Box sx={{ my: 2 }}>
-              {cart.items.map((item) => (
-                <Box
-                  key={item.product.id}
-                  sx={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    mb: 1,
-                  }}
-                >
-                  <Typography variant="body2">
-                    {item.quantity} × {item.product.title}
-                  </Typography>
-                  <Typography variant="body2">
-                    {formatPrice(item.quantity * item.product.currentPrice)}
-                  </Typography>
-                </Box>
-              ))}
+              {cart.items.map((item) => {
+                // Tính giá hiển thị: nếu là rush order thì (BasePrice + 10000) * quantity, ngược lại thì giữ nguyên
+                const displayPrice = formData.isRushOrder && rushEligibilityChecked
+                  ? (item.product.currentPrice + 10000) * item.quantity
+                  : item.quantity * item.product.currentPrice;
+                
+                return (
+                  <Box
+                    key={item.product.id}
+                    sx={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      mb: 1,
+                    }}
+                  >
+                    <Typography variant="body2">
+                      {item.quantity} × {item.product.title}
+                    </Typography>
+                    <Typography variant="body2">
+                      {formatPrice(displayPrice)}
+                    </Typography>
+                  </Box>
+                );
+              })}
             </Box>
 
             <Divider sx={{ my: 2 }} />
@@ -476,7 +569,9 @@ const DeliveryInfoPage: React.FC = () => {
             >
               <Typography variant="body1">Subtotal:</Typography>
               <Typography variant="body1">
-                {formatPrice(cart.subtotal ? cart.subtotal : 0)}
+                {formData.isRushOrder && rushEligibilityChecked
+                  ? formatPrice(subtotal)
+                  : formatPrice(cart.subtotal ? cart.subtotal : 0)}
               </Typography>
             </Box>
 
@@ -485,7 +580,9 @@ const DeliveryInfoPage: React.FC = () => {
             >
               <Typography variant="body1">VAT (10%):</Typography>
               <Typography variant="body1">
-                {formatPrice(cart.subtotal ? cart.subtotal * 0.1 : 0)}
+                {formData.isRushOrder && rushEligibilityChecked
+                  ? formatPrice(tax)
+                  : formatPrice(cart.subtotal ? cart.subtotal * 0.1 : 0)}
               </Typography>
             </Box>
 
@@ -494,9 +591,9 @@ const DeliveryInfoPage: React.FC = () => {
             <Box sx={{ display: "flex", justifyContent: "space-between" }}>
               <Typography variant="h6">Total:</Typography>
               <Typography variant="h6">
-                {formatPrice(
-                  cart.subtotal ? cart.subtotal + cart.subtotal * 0.1 : 0
-                )}
+                {formData.isRushOrder && rushEligibilityChecked
+                  ? formatPrice(subtotal + tax)
+                  : formatPrice(cart.subtotal ? cart.subtotal + cart.subtotal * 0.1 : 0)}
               </Typography>
             </Box>
           </Paper>

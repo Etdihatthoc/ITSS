@@ -14,7 +14,7 @@ interface CartItemDTO {
 
 interface CartCalculationRequest {
   items: CartItemDTO[];
-  isRushDelivery: boolean;
+  rushDelivery: boolean;
   province: string;
 }
 
@@ -22,6 +22,7 @@ export interface CartCalculationResponse {
   subtotal: number;
   tax: number;
   deliveryFee: number;
+  rushDeliveryFee: number;
   total: number;
   items: CartItemDetailDTO[];
   allItemsAvailable: boolean;
@@ -118,12 +119,12 @@ const cartService = {
 
   calculateCart: async (
     items: CartItemDTO[],
-    isRushDelivery: boolean = false,
+    rushDelivery: boolean = false,
     province: string = ""
   ): Promise<CartCalculationResponse> => {
     const request: CartCalculationRequest = {
       items,
-      isRushDelivery,
+      rushDelivery,
       province,
     };
 

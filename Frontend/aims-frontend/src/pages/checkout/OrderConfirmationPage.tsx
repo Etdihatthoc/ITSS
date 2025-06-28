@@ -16,6 +16,7 @@ import {
 import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutline";
 import ErrorOutlineIcon from "@mui/icons-material/ErrorOutline";
 import orderService from "../../services/orderService";
+import rushOrderService from "../../services/RushOrderService";
 import { Order } from "../../types/order";
 import { useCart } from "../../contexts/CartContext";
 
@@ -35,7 +36,7 @@ const OrderConfirmationPage: React.FC = () => {
         const searchParams = new URLSearchParams(window.location.search);
         const transactionId = searchParams.get("transactionId");
         const status = transactionId && transactionId !== "-1";
-        setPaymentSuccess(status);
+        setPaymentSuccess(!!status);
         console.log("Transaction ID:", transactionId);
         console.log("Status:", status);
         if (status && transactionId) {
@@ -69,6 +70,16 @@ const OrderConfirmationPage: React.FC = () => {
               );
             });
 
+          // Format transactionData cho đúng với API yêu cầu
+          const formattedTransactionData = {
+            transactionId: transactionData.transactionNo || transactionId,
+            bankCode: "VNPAY",
+            amount: transactionData.amount,
+            cardType: "credit_card",
+            payDate: transactionData.payDate,
+            errorMessage: "",
+          };
+
           // Ensure transactionData has all required fields
           const checkoutRequest = {
             deliveryInfo,
@@ -76,15 +87,24 @@ const OrderConfirmationPage: React.FC = () => {
               ...invoiceData,
               cart: cartData,
             },
-            transactionData: transactionData,
+            transactionData: formattedTransactionData,
             status: "PENDING",
           };
           console.log("checkout request:", checkoutRequest);
-          const response = await orderService.completeCheckout(checkoutRequest);
+
+          // Gọi API tùy theo loại đơn hàng
+          let response;
+          if (deliveryInfo.isRushOrder) {
+            // Nếu là rush order, gọi API rush-orders
+            response = await rushOrderService.completeRushCheckout(checkoutRequest);
+          } else {
+            // Nếu không phải rush order, gọi API orders như cũ
+            response = await orderService.completeCheckout(checkoutRequest);
+          }
 
           sessionStorage.setItem("orderAlreadyCreated", "true");
 
-          setOrderDetails(response.data);
+          setOrderDetails(response.data as Order);
           setPaymentSuccess(true);
 
           // Clear localStorage
