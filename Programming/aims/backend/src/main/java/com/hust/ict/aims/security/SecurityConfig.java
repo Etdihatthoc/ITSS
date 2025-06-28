@@ -44,7 +44,7 @@ public class SecurityConfig {
                 // Configure endpoint authorization
                 .authorizeHttpRequests(auth -> auth
                         // Public endpoints
-                        //.requestMatchers(HttpMethod.POST,"/api/products/**").hasAuthority("ROLE_MANAGER")
+                        .requestMatchers(HttpMethod.POST,"/api/products/**").hasAuthority("ROLE_MANAGER")
                         .requestMatchers(HttpMethod.PUT, "/api/products/**").hasAuthority("ROLE_MANAGER")
                         .requestMatchers(HttpMethod.DELETE, "/api/products/**").hasAuthority("ROLE_MANAGER")
                         .anyRequest().permitAll()
