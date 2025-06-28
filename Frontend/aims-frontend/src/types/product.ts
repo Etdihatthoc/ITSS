@@ -20,75 +20,13 @@ export enum DiscType {
 export type Product = Book | CD | LP | DVD;
 
 export interface BaseProduct {
-  id: string;
+  id: number;
+  productType: string;
   title: string;
   category: string;
   value: number;
   currentPrice: number;
-  productDescription: string;
-  barcode: string;
-  quantity: number;
-  warehouseEntryDate: string;
-  productDimensions: string;
-  weight: number;
-  imageURL?: string;
-  mediaType: MediaType;
-  rushOrderEligible?: boolean;
-}
-
-export interface Book extends BaseProduct {
-  authors: string[];
-  coverType: CoverType;
-  publisher: string;
-  publicationDate: string;
-  pages?: number;
-  language?: string;
-  genre?: string;
-  currentPrice: number;
-}
-
-export interface CD extends BaseProduct {
-  artists: string[];
-  recordLabel: string;
-  tracklist: string[];
-  genre: string;
-  releaseDate?: string;
-}
-
-export interface LP extends BaseProduct {
-  artists: string[];
-  recordLabel: string;
-  tracklist: string[];
-  genre: string;
-  releaseDate?: string;
-}
-
-export interface DVD extends BaseProduct {
-  discType: DiscType;
-  director: string;
-  runtime: number;
-  studio: string;
-  language: string[];
-  subtitles: string[];
-  releaseDate?: string;
-  genre?: string;
-}
-
-// Add a ProductFilter interface for filtering and sorting products
-export interface ProductFilter {
-  mediaType?: MediaType;
-  minPrice?: number;
-  maxPrice?: number;
-  sortBy?: "price" | "title" | "releaseDate";
-  sortDirection?: "asc" | "desc";
-}
-
-export interface ProductCreate {
-  title: string;
-  category: string;
-  value: number;
-  currentPrice: number;
-  productDescription: string;
+  productDescription?: string;
   barcode: string;
   quantity: number;
   warehouseEntryDate: string;
@@ -96,12 +34,89 @@ export interface ProductCreate {
   weight: number;
   imageURL: string;
   rushOrderEligible?: boolean;
-  mediaType: MediaType;
+}
+
+export interface Book extends BaseProduct {
   genre?: string;
+  author: string;
+  coverType: string;
+  publisher: string;
+  language: string;
+  numberOfPage: number;
+  publicationDate: string;
+}
+
+export interface CD extends BaseProduct {
+  genre: string;
+  album: string;
+  artist: string;
+  recordLabel: string;
+  releaseDate: string;
+  tracklist?: string;
+}
+export interface LP extends BaseProduct {
+  genre: string;
+  album: string;
+  artist: string;
+  recordLabel: string;
+  releaseDate: string;
+  tracklist?: string;
+}
+
+export interface DVD extends BaseProduct {
+  genre?: string;
+  releaseDate: string;
+  subtitle: string;
+  language: string;
+  studio: string;
+  runtime: string;
+  discType: string;
+  director: string;
+}
+
+// Updated ProductFilter - only includes fields that backend can support
+export interface ProductFilter {
+  // Basic pagination (backend supports this)
+  page?: number;
+  size?: number;
+  
+  // Search by title 
+  search?: string;
+  
+  // Category filter 
+  category?: string;
+  
+  // Media type filter 
+  productType?: string;
+  
+  // Price range 
+  minPrice?: number;
+  maxPrice?: number;
+  
+  // Sorting 
+  sortBy?: "title" | "currentPrice" | "warehouseEntryDate";
+  sortDirection?: "asc" | "desc";
+}
+
+export interface ProductCreate {
+  productType: string;
+  title: string;
+  category: string;
+  value: number;
+  currentPrice: number;
+  productDescription?: string;
+  barcode: string;
+  quantity: number;
+  warehouseEntryDate: string;
+  productDimensions: string;
+  weight: number;
+  imageURL: string;
+  rushOrderEligible?: boolean;
+  genre: string;
 
   // Book specific properties - NOW REQUIRED for books
   author?: string;
-  coverType?: CoverType;
+  coverType?: string;
   publisher?: string;
   publicationDate?: string;
   numberOfPage?: number;
@@ -115,58 +130,27 @@ export interface ProductCreate {
   releaseDate?: string;
 
   // DVD specific properties - NOW REQUIRED for DVDs
-  discType?: DiscType;
+  discType?: string;
   director?: string;
   runtime?: string;
   studio?: string;
   subtitle?: string;
 }
-// export interface ProductCreate {
-//   title: string;
-//   category: string;
-//   value: number;
-//   price: number;
-//   description: string;
-//   barcode: string;
-//   quantity: number;
-//   warehouseEntryDate: string;
-//   dimensions: string;
-//   weight: number;
-//   imageUrl?: string;
-//   mediaType: MediaType;
-
-//   // Book specific properties
-//   authors?: string[];
-//   coverType?: CoverType;
-//   publisher?: string;
-//   publicationDate?: string;
-//   pages?: number;
-//   language?: string | string[];
-//   genre?: string;
-
-//   // CD/LP specific properties
-//   artists?: string[];
-//   recordLabel?: string;
-//   tracklist?: string[];
-//   releaseDate?: string;
-
-//   // DVD specific properties
-//   discType?: DiscType;
-//   director?: string;
-//   runtime?: number;
-//   studio?: string;
-//   subtitles?: string[];
-// }
 
 // Interface for updating an existing product
 export interface ProductUpdate extends Partial<ProductCreate> {
   id?: string; // ID is optional for updates
 }
 
-// Interface for product query parameters
-export interface ProductQueryParams extends ProductFilter {
+
+export interface ProductQueryParams {
   page?: number;
-  limit?: number;
+  size?: number;
   search?: string;
   category?: string;
+  productType?: string;
+  minPrice?: number;
+  maxPrice?: number;
+  sortBy?: "title" | "currentPrice" | "warehouseEntryDate";
+  sortDirection?: "asc" | "desc";
 }

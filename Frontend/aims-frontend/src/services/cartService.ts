@@ -7,6 +7,45 @@ import type {
   CartItem,
 } from "../types/cart";
 
+interface CartItemDTO {
+  productId: string | number;
+  quantity: number;
+}
+
+interface CartCalculationRequest {
+  items: CartItemDTO[];
+  isRushDelivery: boolean;
+  province: string;
+}
+
+export interface CartCalculationResponse {
+  subtotal: number;
+  tax: number;
+  deliveryFee: number;
+  total: number;
+  items: CartItemDetailDTO[];
+  allItemsAvailable: boolean;
+  outOfStockItems?: InsufficientStockDTO[];
+}
+
+interface CartItemDetailDTO {
+  productId: number;
+  title: string;
+  price: number;
+  quantity: number;
+  subtotal: number;
+  imageURL: string;
+  category: string;
+}
+
+interface InsufficientStockDTO {
+  productId: number;
+  title: string;
+  available: number;
+  requested: number;
+  message: string;
+}
+
 const cartService = {
   // Get current cart
   getCart: async () => {
@@ -75,6 +114,31 @@ const cartService = {
       }
       throw error;
     }
+  },
+
+  calculateCart: async (
+    items: CartItemDTO[],
+    isRushDelivery: boolean = false,
+    province: string = ""
+  ): Promise<CartCalculationResponse> => {
+    const request: CartCalculationRequest = {
+      items,
+      isRushDelivery,
+      province,
+    };
+
+    const response = await api.post<CartCalculationResponse>(
+      `/carts/calculate`,
+      request,
+      {
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+          "Content-Type": "application/json",
+        },
+      }
+    );
+
+    return response.data;
   },
 };
 

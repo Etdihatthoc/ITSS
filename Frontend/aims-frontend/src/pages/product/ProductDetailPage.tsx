@@ -1,4 +1,3 @@
-// src/pages/product/ProductDetailPage.tsx
 import React, { useState, useEffect } from "react";
 import { useParams } from "react-router-dom";
 import {
@@ -15,26 +14,26 @@ import {
   Chip,
   Paper,
 } from "@mui/material";
-import { MediaType, Product, Book, CD, LP, DVD } from "../../types/product";
 import productService from "../../services/productService";
 import { useCart } from "../../contexts/CartContext";
+import { Product, Book, CD, LP, DVD } from "../../types/product";
 
-// Type guard functions to check product types
-const isBook = (product: Product): product is Book => {
-  return product.mediaType === MediaType.BOOK;
-};
+// Type guards for different product types
+function isBook(product: Product): product is Book {
+  return product.productType === "BOOK";
+}
 
-const isCD = (product: Product): product is CD => {
-  return product.mediaType === MediaType.CD;
-};
+function isCD(product: Product): product is CD {
+  return product.productType === "CD";
+}
 
-const isLP = (product: Product): product is LP => {
-  return product.mediaType === MediaType.LP;
-};
+function isLP(product: Product): product is LP {
+  return product.productType === "LP";
+}
 
-const isDVD = (product: Product): product is DVD => {
-  return product.mediaType === MediaType.DVD;
-};
+function isDVD(product: Product): product is DVD {
+  return product.productType === "DVD";
+}
 
 const ProductDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -57,148 +56,120 @@ const ProductDetailPage: React.FC = () => {
         setLoading(false);
       }
     };
-
     fetchProduct();
   }, [id]);
 
-  const handleAddToCart = async () => {
+  const handleAddToCart = () => {
     if (product) {
       addToCart(product, quantity);
     }
   };
 
-  const formatPrice = (price: number) => {
-    return new Intl.NumberFormat("vi-VN", {
+  const formatPrice = (price: number) =>
+    new Intl.NumberFormat("vi-VN", {
       style: "currency",
       currency: "VND",
     }).format(price);
-  };
 
+  // Render media-specific details based on product type
   const renderMediaSpecificDetails = (product: Product) => {
     if (isBook(product)) {
       return (
         <>
           <ListItem>
-            <ListItemText
-              primary="Authors"
-              secondary={product.authors.join(", ")}
-            />
+            <ListItemText primary="Author" secondary={product.author || "N/A"} />
           </ListItem>
           <ListItem>
-            <ListItemText primary="Cover Type" secondary={product.coverType} />
+            <ListItemText primary="Cover Type" secondary={product.coverType || "N/A"} />
           </ListItem>
           <ListItem>
-            <ListItemText primary="Publisher" secondary={product.publisher} />
+            <ListItemText primary="Publisher" secondary={product.publisher || "N/A"} />
           </ListItem>
           <ListItem>
             <ListItemText
               primary="Publication Date"
-              secondary={new Date(product.publicationDate).toLocaleDateString()}
+              secondary={product.publicationDate ? new Date(product.publicationDate).toLocaleDateString() : "N/A"}
             />
           </ListItem>
-          {product.pages && (
-            <ListItem>
-              <ListItemText primary="Pages" secondary={product.pages} />
-            </ListItem>
-          )}
-          {product.language && (
-            <ListItem>
-              <ListItemText primary="Language" secondary={product.language} />
-            </ListItem>
-          )}
-          {product.genre && (
-            <ListItem>
-              <ListItemText primary="Genre" secondary={product.genre} />
-            </ListItem>
-          )}
+          <ListItem>
+            <ListItemText primary="Number of Pages" secondary={product.numberOfPage ?? "N/A"} />
+          </ListItem>
+          <ListItem>
+            <ListItemText primary="Language" secondary={product.language || "N/A"} />
+          </ListItem>
         </>
       );
-    } else if (isCD(product) || isLP(product)) {
+    }
+
+    if (isCD(product) || isLP(product)) {
       return (
         <>
           <ListItem>
-            <ListItemText
-              primary="Artists"
-              secondary={product.artists.join(", ")}
-            />
+            <ListItemText primary="Album" secondary={product.album || "N/A"} />
+          </ListItem>
+          <ListItem>
+            <ListItemText primary="Artist" secondary={product.artist || "N/A"} />
+          </ListItem>
+          <ListItem>
+            <ListItemText primary="Record Label" secondary={product.recordLabel || "N/A"} />
           </ListItem>
           <ListItem>
             <ListItemText
-              primary="Record Label"
-              secondary={product.recordLabel}
+              primary="Release Date"
+              secondary={product.releaseDate ? new Date(product.releaseDate).toLocaleDateString() : "N/A"}
             />
           </ListItem>
-          <ListItem>
-            <ListItemText primary="Genre" secondary={product.genre} />
-          </ListItem>
-          {product.releaseDate && (
-            <ListItem>
-              <ListItemText
-                primary="Release Date"
-                secondary={new Date(product.releaseDate).toLocaleDateString()}
-              />
-            </ListItem>
-          )}
           <ListItem>
             <ListItemText
               primary="Tracklist"
               secondary={
-                <ul style={{ margin: 0, paddingLeft: 16 }}>
-                  {product.tracklist.map((track, index) => (
-                    <li key={index}>{track}</li>
-                  ))}
-                </ul>
+                product.tracklist
+                  ? (
+                      <ul style={{ margin: 0, paddingLeft: 16 }}>
+                        {product.tracklist.split("\n").map((track: string, idx: number) => (
+                          <li key={idx}>{track}</li>
+                        ))}
+                      </ul>
+                    )
+                  : "N/A"
               }
             />
           </ListItem>
         </>
       );
-    } else if (isDVD(product)) {
+    }
+
+    if (isDVD(product)) {
       return (
         <>
           <ListItem>
-            <ListItemText primary="Disc Type" secondary={product.discType} />
+            <ListItemText primary="Director" secondary={product.director || "N/A"} />
           </ListItem>
           <ListItem>
-            <ListItemText primary="Director" secondary={product.director} />
+            <ListItemText primary="Studio" secondary={product.studio || "N/A"} />
           </ListItem>
           <ListItem>
-            <ListItemText
-              primary="Runtime"
-              secondary={`${product.runtime} minutes`}
-            />
+            <ListItemText primary="Runtime" secondary={product.runtime || "N/A"} />
           </ListItem>
           <ListItem>
-            <ListItemText primary="Studio" secondary={product.studio} />
+            <ListItemText primary="Disc Type" secondary={product.discType || "N/A"} />
           </ListItem>
           <ListItem>
-            <ListItemText
-              primary="Languages"
-              secondary={product.language.join(", ")}
-            />
+            <ListItemText primary="Subtitle" secondary={product.subtitle || "N/A"} />
+          </ListItem>
+          <ListItem>
+            <ListItemText primary="Language" secondary={product.language || "N/A"} />
           </ListItem>
           <ListItem>
             <ListItemText
-              primary="Subtitles"
-              secondary={product.subtitles.join(", ")}
+              primary="Release Date"
+              secondary={product.releaseDate ? new Date(product.releaseDate).toLocaleDateString() : "N/A"}
             />
           </ListItem>
-          {product.releaseDate && (
-            <ListItem>
-              <ListItemText
-                primary="Release Date"
-                secondary={new Date(product.releaseDate).toLocaleDateString()}
-              />
-            </ListItem>
-          )}
-          {product.genre && (
-            <ListItem>
-              <ListItemText primary="Genre" secondary={product.genre} />
-            </ListItem>
-          )}
         </>
       );
     }
+
     return null;
   };
 
@@ -252,7 +223,7 @@ const ProductDetailPage: React.FC = () => {
           </Typography>
 
           <Box sx={{ display: "flex", gap: 1, mb: 2 }}>
-            <Chip label={product.mediaType} color="primary" />
+            <Chip label={product.productType} color="primary" />
             <Chip label={product.category} variant="outlined" />
           </Box>
 
@@ -321,11 +292,22 @@ const ProductDetailPage: React.FC = () => {
               <ListItem>
                 <ListItemText
                   primary="Warehouse Entry Date"
-                  secondary={new Date(
-                    product.warehouseEntryDate
-                  ).toLocaleDateString()}
+                  secondary={product.warehouseEntryDate ? new Date(product.warehouseEntryDate).toLocaleDateString() : "N/A"}
                 />
               </ListItem>
+              {product.genre && (
+                <ListItem>
+                  <ListItemText primary="Genre" secondary={product.genre} />
+                </ListItem>
+              )}
+              {product.rushOrderEligible !== undefined && (
+                <ListItem>
+                  <ListItemText 
+                    primary="Rush Order Eligible" 
+                    secondary={product.rushOrderEligible ? "Yes" : "No"} 
+                  />
+                </ListItem>
+              )}
             </List>
           </Paper>
 
@@ -333,7 +315,6 @@ const ProductDetailPage: React.FC = () => {
             <Typography variant="h6" gutterBottom>
               Media Details
             </Typography>
-
             <List dense>{renderMediaSpecificDetails(product)}</List>
           </Paper>
         </Box>

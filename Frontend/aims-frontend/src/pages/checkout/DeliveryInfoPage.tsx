@@ -15,8 +15,6 @@ import {
   CircularProgress,
 } from "@mui/material";
 import { useCart } from "../../contexts/CartContext";
-import deliveryService from "../../services/deliveryService";
-import invoiceService from "../../services/invoiceService";
 
 interface DeliveryFormData {
   recipientName: string;
@@ -448,7 +446,7 @@ const DeliveryInfoPage: React.FC = () => {
         <Box sx={{ flex: { xs: "1 1 100%", md: "0 0 40%" } }}>
           <Paper sx={{ p: 3 }}>
             <Typography variant="h6" gutterBottom>
-              Order Summary
+              Cart Summary
             </Typography>
 
             <Box sx={{ my: 2 }}>
@@ -491,28 +489,13 @@ const DeliveryInfoPage: React.FC = () => {
               </Typography>
             </Box>
 
-            <Box
-              sx={{ display: "flex", justifyContent: "space-between", mb: 1 }}
-            >
-              <Typography variant="body1">Delivery Fee:</Typography>
-              <Typography variant="body1">
-                {loading ? (
-                  <CircularProgress size={16} />
-                ) : (
-                  formatPrice(deliveryFee)
-                )}
-              </Typography>
-            </Box>
-
             <Divider sx={{ my: 2 }} />
 
             <Box sx={{ display: "flex", justifyContent: "space-between" }}>
               <Typography variant="h6">Total:</Typography>
               <Typography variant="h6">
                 {formatPrice(
-                  cart.subtotal
-                    ? cart.subtotal + cart.subtotal * 0.1 + deliveryFee
-                    : 0
+                  cart.subtotal ? cart.subtotal + cart.subtotal * 0.1 : 0
                 )}
               </Typography>
             </Box>

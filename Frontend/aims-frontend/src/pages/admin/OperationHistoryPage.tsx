@@ -87,26 +87,32 @@ const OperationHistoryPage: React.FC = () => {
       console.log("Fetching operations with params:", params);
 
       const response = await productService.getProductOperationHistory(params);
-      
+
       console.log("Raw backend response:", response.data);
 
       // Transform backend data to frontend format
-      const transformedOperations: OperationHistory[] = response.data.data.map((backendOp: any) => ({
-        id: backendOp.operationID.toString(),
-        operationType: backendOp.operationType as OperationType, // Now matches the enum
-        productId: backendOp.product?.id?.toString() || 'N/A',
-        productName: backendOp.product?.title || 'Unknown Product',
-        userId: 'system', // Default value since backend doesn't have this
-        userName: 'System User', // Default value since backend doesn't have this
-        timestamp: backendOp.timestamp,
-        changes: {}, // Could be enhanced later with actual change tracking
-        notes: `Operation on ${backendOp.product?.category || 'Unknown'} category product`
-      }));
+      const transformedOperations: OperationHistory[] = response.data.data.map(
+        (backendOp: any) => ({
+          id: backendOp.operationID.toString(),
+          operationType: backendOp.operationType as OperationType, // Now matches the enum
+          productId: backendOp.product?.id?.toString() || "N/A",
+          productName: backendOp.product?.title || "Unknown Product",
+          userId: "system", // Default value since backend doesn't have this
+          userName: "System User", // Default value since backend doesn't have this
+          timestamp: backendOp.timestamp,
+          changes: {}, // Could be enhanced later with actual change tracking
+          notes: `Operation on ${
+            backendOp.product?.category || "Unknown"
+          } category product`,
+        })
+      );
 
       console.log("Transformed operations:", transformedOperations);
 
       setOperations(transformedOperations);
-      setTotalPages(response.data.totalPages || Math.ceil(response.data.total / 10));
+      setTotalPages(
+        response.data.totalPages || Math.ceil(response.data.total / 10)
+      );
     } catch (err: any) {
       console.error("Failed to fetch operation history:", err);
       setError(
@@ -263,13 +269,21 @@ const OperationHistoryPage: React.FC = () => {
               <InputLabel>Operation Type</InputLabel>
               <Select
                 value={operationType}
-                onChange={(e) => setOperationType(e.target.value as OperationType | "")}
+                onChange={(e) =>
+                  setOperationType(e.target.value as OperationType | "")
+                }
                 label="Operation Type"
               >
                 <MenuItem value="">All</MenuItem>
-                <MenuItem value={OperationType.ADD_PRODUCT}>Add Product</MenuItem>
-                <MenuItem value={OperationType.UPDATE_PRODUCT}>Update Product</MenuItem>
-                <MenuItem value={OperationType.DELETE_PRODUCT}>Delete Product</MenuItem>
+                <MenuItem value={OperationType.ADD_PRODUCT}>
+                  Add Product
+                </MenuItem>
+                <MenuItem value={OperationType.UPDATE_PRODUCT}>
+                  Update Product
+                </MenuItem>
+                <MenuItem value={OperationType.DELETE_PRODUCT}>
+                  Delete Product
+                </MenuItem>
               </Select>
             </FormControl>
 

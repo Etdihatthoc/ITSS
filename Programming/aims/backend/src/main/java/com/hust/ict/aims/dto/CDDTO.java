@@ -13,6 +13,7 @@ public class CDDTO extends ProductDTO {
     private String recordLabel;
     private LocalDate releaseDate;
     private String tracklist;
+    private String genre;
 
     public static CDDTO fromEntity(CD cd) {
         CDDTO dto = new CDDTO();
@@ -22,6 +23,7 @@ public class CDDTO extends ProductDTO {
         dto.setRecordLabel(cd.getRecordLabel());
         dto.setReleaseDate(cd.getReleaseDate());
         dto.setTracklist(cd.getTracklist());
+        dto.setGenre(cd.getGenre());
         return dto;
     }
 }

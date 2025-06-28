@@ -21,14 +21,17 @@ public class Book extends Product {
     @Column(name = "publisher", nullable = false)
     private String publisher;
 
-    @Column(name = "language", nullable = false)
+    @Column(name = "language", nullable = true)
     private String language;
 
-    @Column(name = "numberOfPage", nullable = false)
-    private int numberOfPage;
+    @Column(name = "numberOfPage", nullable = true)
+    private Integer numberOfPage;
 
     @Column(name = "publicationDate", nullable = false)
     private LocalDate publicationDate;
+
+    @Column(name = "genre", nullable = true)
+    private String genre;
 
     // Getters and setters
     public String getAuthor() {
@@ -56,7 +59,7 @@ public class Book extends Product {
         this.language = language;
     }
     public int getNumberOfPage() {
-        return numberOfPage;
+        return this.numberOfPage != null ? this.numberOfPage.intValue() : 0;
     }
     public void setNumberOfPage(int numberOfPage) {
         this.numberOfPage = numberOfPage;
@@ -66,6 +69,12 @@ public class Book extends Product {
     }
     public void setPublicationDate(LocalDate publicationDate) {
         this.publicationDate = publicationDate;
+    }
+    public String getGenre() {
+        return genre;
+    }
+    public void setGenre(String genre) {
+        this.genre = genre;
     }
 }
 

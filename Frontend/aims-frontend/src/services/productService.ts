@@ -23,17 +23,35 @@ const productService = {
   },
 
   getAllProducts: async () => {
-    return await api.get<any>("/products"); //=> http://localhost:8080/api/products
+    return await api.get<any>("/products/all");
+  },
+
+  getProducts: async (page = 1, size = 20) => {
+    return await api.get("/products/random", {
+      params: { page: page - 1, size },
+    });
   },
 
   // Search products
   searchProducts: async (params: ProductQueryParams) => {
-    return await api.get<{ data: Product[]; total: number }>(
-      "/products/search",
-      {
-        params,
-      }
-    );
+    return await api.get<{
+      data: Product[];
+      total: number;
+      page: number;
+      totalPages: number;
+    }>("/products/search", {
+      params: {
+        page: (params.page || 1) - 1, // Convert to 0-based for backend
+        size: params.size || 20,
+        search: params.search,
+        category: params.category,
+        productType: params.productType,
+        minPrice: params.minPrice,
+        maxPrice: params.maxPrice,
+        sortBy: params.sortBy || "id",
+        sortDirection: params.sortDirection || "asc",
+      },
+    });
   },
 
   // Get product by ID
@@ -87,6 +105,17 @@ const productService = {
       `/products/${productId}/operations`,
       { params }
     );
+  },
+
+  updateStock: async (
+    productId: string | number,
+    quantity: number,
+    operation: "increase" | "decrease"
+  ) => {
+    return await api.patch<Product>(`/products/${productId}/stock`, {
+      quantity,
+      operation,
+    });
   },
 };
 

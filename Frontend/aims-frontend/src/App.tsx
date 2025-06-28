@@ -7,7 +7,6 @@ import "react-toastify/dist/ReactToastify.css";
 
 // Contexts
 import { CartProvider } from "./contexts/CartContext";
-import { AuthProvider } from "./contexts/AuthContext";
 
 // Components
 import MainLayout from "./components/layout/MainLayout";
@@ -62,7 +61,7 @@ function App() {
               <Route
                 path="checkout/confirmation"
                 element={<OrderConfirmationPage />}
-              />  
+              />
               <Route path="order/:id" element={<ViewOrderPage />} />
 
               <Route
@@ -82,9 +81,9 @@ function App() {
               <Route
                 path="admin/users"
                 element={
-                  // <ProtectedRoute requiredRole={UserRole.ADMIN}>
-                  <UserManagementPage />
-                  // </ProtectedRoute>
+                  <ProtectedRoute requiredRole={UserRole.ADMIN}>
+                    <UserManagementPage />
+                  </ProtectedRoute>
                 }
               />
               <Route

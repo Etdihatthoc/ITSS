@@ -28,6 +28,7 @@ public class PaymentStrategyFactory {
         if (strategy == null) throw new IllegalArgumentException("Unsupported gateway: " + gateway);
         return strategy;
     }
+
     public Set<String> getAllGateways() {
         return strategies.keySet();
     }

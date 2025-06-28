@@ -23,6 +23,12 @@ public class RushOrder extends Orders{
 
     }
 
+    public RushOrder(Transaction transaction, Invoice invoice, DeliveryInfo deliveryInfo, String status, LocalDateTime deliveryTime, String deliveryInstruction) {
+        super(transaction, invoice, deliveryInfo, status);
+        this.deliveryTime = deliveryTime;
+        this.deliveryInstruction = deliveryInstruction;
+    }
+
     @Override
     public String toString() {
         return "RushOrder{" +

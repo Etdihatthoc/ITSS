@@ -11,7 +11,7 @@ import java.time.LocalDate;
 @DiscriminatorValue("DVD")
 
 public class DVD extends Product {
-    @Column(name = "releaseDate", nullable = false)
+    @Column(name = "releaseDate", nullable = true)
     private LocalDate releaseDate;
 
     @Column(name = "subtitle", length = 500)
@@ -31,6 +31,10 @@ public class DVD extends Product {
 
     @Column(name = "director", nullable = false)
     private String director;
+
+    @Column(name = "genre", nullable = true)
+    private String genre;
+
     // Getters and setters
     public LocalDate getReleaseDate() {
         return releaseDate;
@@ -74,5 +78,10 @@ public class DVD extends Product {
     public void setDirector(String director) {
         this.director = director;
     }
-
+    public String getGenre() {
+        return genre;
+    }
+    public void setGenre(String genre) {
+        this.genre = genre;
+    }
 }

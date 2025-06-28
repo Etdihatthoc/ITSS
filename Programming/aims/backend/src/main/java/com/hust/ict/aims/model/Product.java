@@ -49,13 +49,11 @@ public class Product {
     @Column(nullable = false, unique = true)
     private String barcode;
 
-    @Column(length = 1000)
+    @Column(length = 2000)
     private String productDescription;
 
     @Column(nullable = false)
     private int quantity;
-
-    private String genre;
 
     @Column(nullable = false)
     private boolean deleted = false;
@@ -182,13 +180,5 @@ public class Product {
 
     public void setQuantity(int quantity) {
         this.quantity = quantity;
-    }
-
-    public String getGenre() {
-        return genre;
-    }
-
-    public void setGenre(String genre) {
-        this.genre = genre;
     }
 }

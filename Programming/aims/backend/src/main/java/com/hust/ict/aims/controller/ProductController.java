@@ -10,27 +10,25 @@ import com.hust.ict.aims.service.BusinessRulesService;
 import com.hust.ict.aims.service.OperationService;
 import com.hust.ict.aims.service.ProductService;
 import com.hust.ict.aims.service.UpdateProductOperation;
+import jakarta.servlet.http.HttpSession;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
-import java.util.stream.Collectors;
-
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
-import java.util.Collections;
-import java.util.HashMap;
-
 import java.util.Map;
-import java.util.HashMap;
-import java.util.Collections;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 @RestController
 @RequestMapping("/api/products")
@@ -53,6 +51,9 @@ public class ProductController {
         this.productService = productService;
         this.operationService = operationService;
     }
+
+    @Autowired
+    private ProductMapper productMapper;
 
     @PostMapping
     public Product save(@RequestBody Product product) {
@@ -195,12 +196,12 @@ public class ProductController {
         return ResponseEntity.ok(ProductDTO.fromEntity(product)); // Sử dụng static method
     }
 
-    @GetMapping
-    public List<ProductDTO> findAll() {
-        return productService.findAll().stream()
-                .map(ProductDTO::fromEntity) // Ánh xạ từng entity sang DTO
-                .collect(Collectors.toList());
-    }
+//    @GetMapping
+//    public List<ProductDTO> findAll() {
+//        return productService.findAll().stream()
+//                .map(ProductDTO::fromEntity) // Ánh xạ từng entity sang DTO
+//                .collect(Collectors.toList());
+//    }
 
 //    @GetMapping("/{page}")
 //    public Page<ProductDTO> list(
@@ -208,6 +209,109 @@ public class ProductController {
 //            @RequestParam(defaultValue = "20") int size) {
 //        return productService.findRandom(page, size);
 //    }
+
+    @GetMapping
+    public ResponseEntity<Map<String, Object>> getProducts(
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "20") int size) {
+
+        // Lấy tổng số sản phẩm
+        long totalItems = productService.countProducts();
+        int totalPages = (int) Math.ceil((double) totalItems / size);
+
+        //int page = ThreadLocalRandom.current().nextInt(0, totalPages - 1);
+        // Lấy page từ service (0-based)
+        Page<Product> productPage = productService.getProducts(page - 1, size);
+
+        // Map về DTO
+        List<ProductDTO> dtos = productPage.getContent().stream()
+                .map(productMapper::toDTO)
+                .toList();
+
+        // Trả về object phân trang
+        Map<String, Object> response = new HashMap<>();
+        response.put("data", dtos);
+        response.put("total", totalItems);
+        response.put("page", page);
+        response.put("totalPages", totalPages);
+
+        return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/all")
+    public ResponseEntity<List<ProductDTO>> getAllProducts() {
+        List<Product> products = productService.findAll();
+        List<ProductDTO> dtos = products.stream()
+                .map(productMapper::toDTO)
+                .toList();
+        return ResponseEntity.ok(dtos);
+    }
+
+    // New search endpoint with filtering capabilities
+    @GetMapping("/search")
+    public ResponseEntity<Map<String, Object>> searchProducts(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) String category,
+            @RequestParam(required = false) String productType,
+            @RequestParam(required = false) Double minPrice,
+            @RequestParam(required = false) Double maxPrice,
+            @RequestParam(required = false, defaultValue = "id") String sortBy,
+            @RequestParam(required = false, defaultValue = "asc") String sortDirection) {
+
+        try {
+            // Use service layer for search with filters
+            Page<Product> productPage = productService.searchProductsWithFilters(
+                    search, category, productType, minPrice, maxPrice, sortBy, sortDirection, page, size);
+
+            // Map to DTOs
+            List<ProductDTO> dtos = productPage.getContent().stream()
+                    .map(productMapper::toDTO)
+                    .toList();
+
+            // Build response
+            Map<String, Object> response = new HashMap<>();
+            response.put("data", dtos);
+            response.put("total", productPage.getTotalElements());
+            response.put("page", page + 1); // Convert to 1-based for frontend
+            response.put("totalPages", productPage.getTotalPages());
+
+            return ResponseEntity.ok(response);
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(Collections.singletonMap("error", "Failed to search products: " + e.getMessage()));
+        }
+    }
+
+    // Random products endpoint
+    @GetMapping("/random")
+    public ResponseEntity<Map<String, Object>> getRandomProducts(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+
+        try {
+            Page<Product> productPage = productService.getRandomProducts(page, size);
+            List<ProductDTO> dtos = productPage.getContent().stream()
+                                            .map(productMapper::toDTO)
+                                            .toList();
+
+            Map<String, Object> resp = new HashMap<>();
+            resp.put("data", dtos);
+            resp.put("total", productPage.getTotalElements());
+            resp.put("page", page + 1); // Convert to 1-based for frontend
+            resp.put("totalPages", productPage.getTotalPages());
+            resp.put("count", dtos.size());
+
+            return ResponseEntity.ok(resp);
+        } catch (Exception e) {
+            e.printStackTrace();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(Collections.singletonMap("error", "Failed to get random products: " + e.getMessage()));
+        }
+    }
 
     @PutMapping("/{id}")
     public Product update(@PathVariable Long id, @RequestBody Product product) {
@@ -337,5 +441,27 @@ public class ProductController {
                     new InventoryCheckResponse(false, outOfStockProducts)
             );
         }
+    }
+
+    /**
+     * Update product stock quantity
+     *
+     * @param id Product ID
+     * @param stockUpdateDTO Contains quantity and operation (increase/decrease)
+     * @return Updated product
+     */
+    @PatchMapping("/{id}/stock")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_MANAGER')")
+    public ResponseEntity<Product> updateProductStock(
+            @PathVariable Long id,
+            @RequestBody StockUpdateDTO stockUpdateDTO) {
+
+        Product updatedProduct = productService.updateProductStock(
+                id,
+                stockUpdateDTO.getQuantity(),
+                stockUpdateDTO.getOperation()
+        );
+
+        return ResponseEntity.ok(updatedProduct);
     }
 }

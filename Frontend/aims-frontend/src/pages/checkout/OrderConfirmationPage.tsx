@@ -1,6 +1,6 @@
 // src/pages/checkout/OrderConfirmationPage.tsx
 import React, { useState, useEffect } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import {
   Container,
   Typography,
@@ -17,66 +17,69 @@ import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutline";
 import ErrorOutlineIcon from "@mui/icons-material/ErrorOutline";
 import orderService from "../../services/orderService";
 import { Order } from "../../types/order";
+import { useCart } from "../../contexts/CartContext";
 
 const OrderConfirmationPage: React.FC = () => {
-  const location = useLocation();
+  const { clearCart } = useCart();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [paymentSuccess, setPaymentSuccess] = useState(false);
   const [orderDetails, setOrderDetails] = useState<Order | null>(null);
+
   useEffect(() => {
     const verifyPayment = async () => {
       try {
-
         setLoading(true);
-        
-        const searchParams = new URLSearchParams(window.location.search);
-        const responseCode = searchParams.get('vnp_ResponseCode');
-        const status = responseCode === "00" ? "success" : "failure";
-      
-        // Check payment status
-        if (status === "success") {
-          // In a real application, you would fetch the order details from your API
-          // const response = await orderService.getOrderById(orderId);
-          // setOrderDetails(response.data);
 
-          // For demo purposes, let's create a mock order
+        const searchParams = new URLSearchParams(window.location.search);
+        const transactionId = searchParams.get("transactionId");
+        const status = transactionId && transactionId !== "-1";
+        setPaymentSuccess(status);
+        console.log("Transaction ID:", transactionId);
+        console.log("Status:", status);
+        if (status && transactionId) {
           const deliveryInfo = JSON.parse(
-          localStorage.getItem("deliveryInfo") || "{}"
+            localStorage.getItem("deliveryInfo") || "{}"
           );
           const userEmail = deliveryInfo.email;
           const invoiceData = JSON.parse(
             localStorage.getItem("invoiceData") || "{}"
           );
           const cartData = JSON.parse(localStorage.getItem("cart") || "{}");
-          const transactionData = formatTransactionData();
-          // const userEmail = deliveryInfo.getItem("email");
+          const transactionData = await formatTransactionData(transactionId);
+
           const params = new URLSearchParams({
-              toGmail: userEmail?.toString()|| "",
-              // body: "okok",
+            toGmail: userEmail?.toString() || "",
           });
-          // Send order confirmation email and log result
-            sendOrderConfirmationEmail(params)
+
+          sendOrderConfirmationEmail(params)
             .then((result) => {
-            if (!result.success) {
-              console.warn("Order confirmation email not sent:", result.message);
-            }
+              if (!result.success) {
+                console.warn(
+                  "Order confirmation email not sent:",
+                  result.message
+                );
+              }
             })
             .catch((emailError: any) => {
-            console.error("Failed to send order confirmation email:", emailError?.message || emailError);
+              console.error(
+                "Failed to send order confirmation email:",
+                emailError?.message || emailError
+              );
             });
-          // Create request object
+
+          // Ensure transactionData has all required fields
           const checkoutRequest = {
             deliveryInfo,
             invoiceData: {
               ...invoiceData,
               cart: cartData,
             },
-            transactionData,
+            transactionData: transactionData,
             status: "PENDING",
           };
-
+          console.log("checkout request:", checkoutRequest);
           const response = await orderService.completeCheckout(checkoutRequest);
 
           sessionStorage.setItem("orderAlreadyCreated", "true");
@@ -85,10 +88,11 @@ const OrderConfirmationPage: React.FC = () => {
           setPaymentSuccess(true);
 
           // Clear localStorage
-          localStorage.removeItem("cart");
+          clearCart();
           localStorage.removeItem("deliveryInfo");
           localStorage.removeItem("invoiceData");
           localStorage.removeItem("transactionData");
+          localStorage.removeItem("orderData");
         } else {
           setPaymentSuccess(false);
           setError("Payment was not successful. Please try again.");
@@ -101,67 +105,82 @@ const OrderConfirmationPage: React.FC = () => {
         setLoading(false);
       }
     };
-
     verifyPayment();
   }, []);
+
   /**
    * Extracts and formats VNPay transaction data from URL parameters
    */
-  function formatTransactionData(): {
+  async function formatTransactionData(transactionId: string): Promise<{
     amount: number;
-    bankCode: string;
-    cardType: string;
-    errorMessage: string;
+    transactionNo: string;
+    gateway: string;
     payDate: string;
-    transactionId: string;
-  } {
-    // Get the current URL's query parameters
-    const urlParams = new URLSearchParams(window.location.search);
-    const responseCode = urlParams.get('vnp_ResponseCode');
-    const isPaymentSuccessful = responseCode === "00";
-    setPaymentSuccess(isPaymentSuccessful);
-    // Format the payment date
+    additionalParams: Record<string, string>;
+  }> {
+    // const formatPayDate = (payDateStr: string | null): string => {
+    //   if (!payDateStr) return new Date().toISOString();
+    //   const year = payDateStr.substring(0, 4);
+    //   const month = payDateStr.substring(4, 6);
+    //   const day = payDateStr.substring(6, 8);
+    //   const hour = payDateStr.substring(8, 10);
+    //   const minute = payDateStr.substring(10, 12);
+    //   const second = payDateStr.substring(12, 14);
+    //   return new Date(
+    //     `${year}-${month}-${day}T${hour}:${minute}:${second}.000Z`
+    //   ).toISOString();
+    // };
     const formatPayDate = (payDateStr: string | null): string => {
       if (!payDateStr) return new Date().toISOString();
-      // Convert YYYYMMDDHHMMSS format to ISO string
-      const year = payDateStr.substring(0, 4);
-      const month = payDateStr.substring(4, 6);
-      const day = payDateStr.substring(6, 8);
-      const hour = payDateStr.substring(8, 10);
-      const minute = payDateStr.substring(10, 12);
-      const second = payDateStr.substring(12, 14);
-      return new Date(`${year}-${month}-${day}T${hour}:${minute}:${second}.000Z`).toISOString();
+
+      // Replace space with 'T' to make it ISO-compliant
+      const isoFormatted = payDateStr.replace(" ", "T") + "Z";
+
+      const date = new Date(isoFormatted);
+      if (isNaN(date.getTime())) {
+        console.warn("Invalid payDate received:", payDateStr);
+        return new Date().toISOString();
+      }
+      return date.toISOString();
     };
-    if (isPaymentSuccessful) {
-      // Create and format transaction data
-      const transactionData = {
-        amount: parseInt(urlParams.get('vnp_Amount') ?? '0') / 100,
-        bankCode: urlParams.get('vnp_BankCode'),
-        cardType: urlParams.get('vnp_BankCode'),
-        errorMessage: "",
-        payDate: formatPayDate(urlParams.get('vnp_PayDate')),
-        transactionId: urlParams.get('vnp_TransactionNo'),
-      };
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 8000);
 
-      // Save transaction data to localStorage
-      localStorage.setItem("transactionData", JSON.stringify(transactionData));
-      console.log("Transaction data created and saved:", transactionData);
+    const response = await fetch(
+      `http://localhost:8080/api/transactions/${transactionId}`,
+      {
+        method: "GET",
+        headers: {
+          Accept: "application/json",
+        },
+        signal: controller.signal,
+      }
+    );
 
-      return transactionData;
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch transaction data: ${response.status}`);
     }
 
-    console.log("Payment failed with response code:", responseCode);
-    // Return a default object with empty or zero values to satisfy the return type
-    return {
-      amount: 0,
-      bankCode: "",
-      cardType: "",
-      errorMessage: "Payment failed",
-      payDate: new Date().toISOString(),
-      transactionId: ""
+    const transaction = await response.json();
+    console.log("Transaction data fetched from backend:", transaction);
+
+    const transactionData = {
+      transactionId: transaction.transactionId || "",
+      amount: transaction.amount || 0,
+      payDate: formatPayDate(transaction.payDate) || new Date().toISOString(),
+      transactionNo: transaction.transactionNo || "",
+      gateway: transaction.gateway || "Not Provided",
+      additionalParams: transaction.additionalParams || {},
+      transactionStatus: transaction.status || "PENDING",
     };
+
+    localStorage.setItem("transactionData", JSON.stringify(transactionData));
+
+    return transactionData;
   }
-  
+
   const formatPrice = (price: number) => {
     return new Intl.NumberFormat("vi-VN", {
       style: "currency",
@@ -512,50 +531,52 @@ const OrderConfirmationPage: React.FC = () => {
  */
 const sendOrderConfirmationEmail = async (
   params: URLSearchParams
-): Promise<{success: boolean; message: string}> => {
+): Promise<{ success: boolean; message: string }> => {
   try {
-    
     // Set timeout to prevent hanging requests
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 5000);
-    
+
     // Make the request with proper headers and signal
-    const response = await fetch(`http://localhost:8080/send-gmail?${params.toString()}`, {
-      method: "GET",
-      headers: {
-        "Accept": "application/json",
-        "Content-Type": "application/json"
-      },
-      signal: controller.signal
-    });
-    
+    const response = await fetch(
+      `http://localhost:8080/send-gmail?${params.toString()}`,
+      {
+        method: "GET",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+        },
+        signal: controller.signal,
+      }
+    );
+
     clearTimeout(timeoutId);
-    
+
     // Parse the response
     const result = await response.json();
-    
+
     if (!response.ok) {
       return {
         success: false,
-        message: result.message || `Failed with status: ${response.status}`
+        message: result.message || `Failed with status: ${response.status}`,
       };
     }
-    
+
     return {
       success: true,
-      message: "Order confirmation email sent successfully"
+      message: "Order confirmation email sent successfully",
     };
   } catch (error: any) {
-    if (error.name === 'AbortError') {
+    if (error.name === "AbortError") {
       return {
-        success: false, 
-        message: "Email request timed out after 5 seconds"
+        success: false,
+        message: "Email request timed out after 5 seconds",
       };
     }
-    
+
     return {
       success: false,
-      message: error.message || "Failed to send order confirmation email"
+      message: error.message || "Failed to send order confirmation email",
     };
   }
 };

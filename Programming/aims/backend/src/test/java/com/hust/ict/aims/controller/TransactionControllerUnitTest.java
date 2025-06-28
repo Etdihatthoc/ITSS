@@ -32,7 +32,7 @@ class TransactionControllerUnitTest {
     @Test
     void testFindAllTransactions() throws Exception {
         Transaction transaction = new Transaction();
-        transaction.setId(1);
+        transaction.setTransactionId(1);
 
         when(transactionService.findAll()).thenReturn(List.of(transaction));
 
@@ -44,7 +44,7 @@ class TransactionControllerUnitTest {
     @Test
     void testFindTransactionById_Found() throws Exception {
         Transaction transaction = new Transaction();
-        transaction.setId(1);
+        transaction.setTransactionId(1);
 
         when(transactionService.findById(1)).thenReturn(transaction);
 
@@ -65,7 +65,7 @@ class TransactionControllerUnitTest {
     @Test
     void testSaveTransaction() throws Exception {
         Transaction transaction = new Transaction();
-        transaction.setId(1);
+        transaction.setTransactionId(1);
         transaction.setAmount(150.0f);
 
         when(transactionService.save(any(Transaction.class))).thenReturn(transaction);
@@ -81,7 +81,7 @@ class TransactionControllerUnitTest {
     @Test
     void testUpdateTransaction() throws Exception {
         Transaction updated = new Transaction();
-        updated.setId(1);
+        updated.setTransactionId(1);
         updated.setAmount(200.0f);
 
         when(transactionService.save(any(Transaction.class))).thenReturn(updated);

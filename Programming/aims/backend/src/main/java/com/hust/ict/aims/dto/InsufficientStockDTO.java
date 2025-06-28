@@ -17,6 +17,4 @@ public class InsufficientStockDTO {
         this.requestedQuantity = requested;
         this.availableQuantity = available;
     }
-
-    // Getters and setters if needed
 }

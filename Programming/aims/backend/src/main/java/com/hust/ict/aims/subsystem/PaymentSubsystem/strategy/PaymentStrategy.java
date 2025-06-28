@@ -1,5 +1,6 @@
 package com.hust.ict.aims.subsystem.PaymentSubsystem.strategy;
 
+import com.hust.ict.aims.exception.PaymentException;
 import com.hust.ict.aims.model.Transaction;
 import org.springframework.stereotype.Service;
 
@@ -10,5 +11,5 @@ import java.util.Map;
 @Service
 public interface PaymentStrategy {
     public String createPaymentRequest(Map<String, String> parameters) throws UnsupportedEncodingException;
-    public Transaction createPaymentTransaction(Map<String, String> parameters);
+    public Transaction createPaymentTransaction(Map<String, String> parameters) throws PaymentException;
 }

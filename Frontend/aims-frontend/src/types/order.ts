@@ -67,7 +67,7 @@ export interface Order {
   transaction: Transaction;
   invoice: Invoice;
   deliveryInfo: DeliveryInfo;
-  status: OrderStatus | string;
+  status: string;
 }
 
 // For use with search parameters

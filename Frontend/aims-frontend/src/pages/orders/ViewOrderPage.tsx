@@ -59,6 +59,10 @@ const ViewOrderPage: React.FC = () => {
   const [notes, setNotes] = useState("");
   const [savingNotes, setSavingNotes] = useState(false);
 
+  // State for refund dialog
+  const [openRefundDialog, setOpenRefundDialog] = useState(false);
+  const [refundLoading, setRefundLoading] = useState(false);
+
   // Load order on component mount
   useEffect(() => {
     if (id) {
@@ -84,7 +88,7 @@ const ViewOrderPage: React.FC = () => {
   };
 
   // Check if user is admin or product manager
-  const isAdmin = true;
+  const isAdmin = false;
   // user &&
   // (user.roles.includes(UserRole.ADMIN) ||
   //   user.roles.includes(UserRole.PRODUCT_MANAGER));
@@ -103,7 +107,7 @@ const ViewOrderPage: React.FC = () => {
 
     try {
       setStatusUpdateLoading(true);
-      await orderService.updateOrderStatus(order.id.toString(), newStatus);
+      await orderService.updateOrderStatus(order.id, newStatus);
 
       // Refresh order details
       fetchOrder(order.id.toString());
@@ -143,6 +147,28 @@ const ViewOrderPage: React.FC = () => {
     }
   };
 
+  // Handle refund confirmation
+  const handleRefundConfirm = async () => {
+    if (!order) return;
+
+    try {
+      setRefundLoading(true);
+      // Call API to update order status to REFUNDED
+      await orderService.updateOrderStatus(order.id, "REFUNDED");
+
+      // Refresh order details
+      fetchOrder(order.id.toString());
+
+      // Close dialog
+      setOpenRefundDialog(false);
+    } catch (err: any) {
+      console.error("Failed to process refund:", err);
+      setError(err.response?.data?.message || "Failed to process refund");
+    } finally {
+      setRefundLoading(false);
+    }
+  };
+
   // Print order receipt
   const handlePrintReceipt = () => {
     window.print();
@@ -174,7 +200,21 @@ const ViewOrderPage: React.FC = () => {
 
   // Get status color
   const getStatusColor = (status: string) => {
-    return status;
+    switch (status) {
+      case "PENDING":
+        return "warning";
+      case "APPROVED":
+        return "success";
+      case "SHIPPED":
+        return "primary";
+      case "DELIVERED":
+        return "success";
+      case "REJECTED":
+      case "CANCELLED":
+        return "error";
+      default:
+        return "default";
+    }
   };
 
   // Get available status transitions based on current status
@@ -272,7 +312,7 @@ const ViewOrderPage: React.FC = () => {
             Print Receipt
           </Button>
 
-          {isAdmin && (
+          {isAdmin ? (
             <Button
               variant="contained"
               startIcon={<EditIcon />}
@@ -284,6 +324,15 @@ const ViewOrderPage: React.FC = () => {
               }
             >
               Update Status
+            </Button>
+          ) : (
+            <Button
+              variant="contained"
+              onClick={() => setOpenRefundDialog(true)}
+              disabled={order.status !== OrderStatus.PENDING}
+              className="no-print"
+            >
+              Refund
             </Button>
           )}
         </Box>
@@ -426,41 +475,41 @@ const ViewOrderPage: React.FC = () => {
               </ListItem>
 
               {/* {order.deliveryInfo.isRushOrder && (
-                <ListItem disableGutters>
-                  <ListItemText
-                    primary="Rush Delivery"
-                    secondary={`Requested time: ${
-                      order.address.rushDeliveryTime || "Not specified"
-                    }`}
-                    primaryTypographyProps={{
-                      color: "primary",
-                      variant: "body2",
-                      fontWeight: "bold",
-                    }}
-                    secondaryTypographyProps={{
-                      color: "text.primary",
-                      variant: "body1",
-                    }}
-                  />
-                </ListItem>
-              )} */}
+                  <ListItem disableGutters>
+                    <ListItemText
+                      primary="Rush Delivery"
+                      secondary={`Requested time: ${
+                        order.address.rushDeliveryTime || "Not specified"
+                      }`}
+                      primaryTypographyProps={{
+                        color: "primary",
+                        variant: "body2",
+                        fontWeight: "bold",
+                      }}
+                      secondaryTypographyProps={{
+                        color: "text.primary",
+                        variant: "body1",
+                      }}
+                    />
+                  </ListItem>
+                )} */}
 
               {/* {order.address.rushDeliveryInstructions && (
-                <ListItem disableGutters>
-                  <ListItemText
-                    primary="Delivery Instructions"
-                    secondary={order.address.rushDeliveryInstructions}
-                    primaryTypographyProps={{
-                      color: "text.secondary",
-                      variant: "body2",
-                    }}
-                    secondaryTypographyProps={{
-                      color: "text.primary",
-                      variant: "body1",
-                    }}
-                  />
-                </ListItem>
-              )} */}
+                  <ListItem disableGutters>
+                    <ListItemText
+                      primary="Delivery Instructions"
+                      secondary={order.address.rushDeliveryInstructions}
+                      primaryTypographyProps={{
+                        color: "text.secondary",
+                        variant: "body2",
+                      }}
+                      secondaryTypographyProps={{
+                        color: "text.primary",
+                        variant: "body1",
+                      }}
+                    />
+                  </ListItem>
+                )} */}
             </List>
           </Box>
 
@@ -700,15 +749,15 @@ const ViewOrderPage: React.FC = () => {
             </Box>
 
             {/* {order.address.isRushOrder && order.rushDeliveryFee > 0 && (
-              <Box
-                sx={{ display: "flex", justifyContent: "space-between", mb: 1 }}
-              >
-                <Typography variant="body1">Rush Delivery Fee:</Typography>
-                <Typography variant="body1">
-                  {formatPrice(order.rushDeliveryFee)}
-                </Typography>
-              </Box>
-            )} */}
+                <Box
+                  sx={{ display: "flex", justifyContent: "space-between", mb: 1 }}
+                >
+                  <Typography variant="body1">Rush Delivery Fee:</Typography>
+                  <Typography variant="body1">
+                    {formatPrice(order.rushDeliveryFee)}
+                  </Typography>
+                </Box>
+              )} */}
 
             <Divider sx={{ my: 1 }} />
 
@@ -791,34 +840,65 @@ const ViewOrderPage: React.FC = () => {
         </Dialog>
       )}
 
+      {/* Refund Confirmation Dialog */}
+      <Dialog
+        open={openRefundDialog}
+        onClose={() => setOpenRefundDialog(false)}
+      >
+        <DialogTitle>Confirm Refund</DialogTitle>
+        <DialogContent>
+          <Typography variant="body1">
+            Are you sure you want to process a refund for this order?
+          </Typography>
+          <Typography variant="body1" sx={{ mt: 2 }}>
+            This action cannot be undone.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => setOpenRefundDialog(false)}
+            disabled={refundLoading}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={handleRefundConfirm}
+            disabled={refundLoading}
+            variant="contained"
+          >
+            {refundLoading ? <CircularProgress size={24} /> : "Process Refund"}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
       {/* Print Styles - Add to your CSS */}
       <style>
         {`
-          @media print {
-            .no-print {
-              display: none !important;
+            @media print {
+              .no-print {
+                display: none !important;
+              }
+
+              .print-only {
+                display: block !important;
+              }
+
+              .print-container {
+                padding: 0 !important;
+                max-width: 100% !important;
+              }
+
+              body {
+                background: white !important;
+              }
             }
 
-            .print-only {
-              display: block !important;
+            @media screen {
+              .print-only {
+                display: none !important;
+              }
             }
-
-            .print-container {
-              padding: 0 !important;
-              max-width: 100% !important;
-            }
-
-            body {
-              background: white !important;
-            }
-          }
-
-          @media screen {
-            .print-only {
-              display: none !important;
-            }
-          }
-        `}
+          `}
       </style>
     </Container>
   );

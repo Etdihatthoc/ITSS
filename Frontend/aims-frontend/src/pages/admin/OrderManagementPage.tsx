@@ -1,6 +1,4 @@
-// src/pages/admin/OrderManagementPage.tsx
 import React, { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
 import {
   Container,
   Typography,
@@ -14,59 +12,71 @@ import {
   TableContainer,
   TableHead,
   TableRow,
-  IconButton,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogContentText,
-  DialogTitle,
+  Chip,
+  Pagination,
+  CircularProgress,
+  Alert,
   FormControl,
   InputLabel,
   Select,
   MenuItem,
-  CircularProgress,
-  Alert,
-  Chip,
-  Pagination,
-  InputAdornment,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  IconButton,
+  Tooltip,
 } from "@mui/material";
 import {
   Search as SearchIcon,
-  Visibility as VisibilityIcon,
-  Edit as EditIcon,
-  Check as CheckIcon,
-  Cancel as CancelIcon,
-  LocalShipping as ShippingIcon,
+  FilterList as FilterIcon,
+  Visibility as ViewIcon,
+  CheckCircle as ApproveIcon,
+  Cancel as RejectIcon,
 } from "@mui/icons-material";
+import { useNavigate } from "react-router-dom";
 import { Order, OrderStatus } from "../../types/order";
 import orderService from "../../services/orderService";
+import productService from "../../services/productService";
 
 const OrderManagementPage: React.FC = () => {
   const navigate = useNavigate();
 
-  // State for orders
+  // State for orders list
   const [orders, setOrders] = useState<Order[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
   // State for pagination
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+  const ITEMS_PER_PAGE = 30; // Show 30 orders per page
+
+  // State for filtering and search
   const [searchTerm, setSearchTerm] = useState("");
-  const [statusFilter, setStatusFilter] = useState<OrderStatus | "">("");
+  const [statusFilter, setStatusFilter] = useState<string>("PENDING"); // Default to PENDING
+  const [filterVisible, setFilterVisible] = useState(false);
 
-  // State for status update dialog
-  const [openStatusDialog, setOpenStatusDialog] = useState(false);
+  // State for order approval/rejection
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
-  const [newStatus, setNewStatus] = useState<OrderStatus>(OrderStatus.PENDING);
-  const [statusUpdateLoading, setStatusUpdateLoading] = useState(false);
+  const [openRejectDialog, setOpenRejectDialog] = useState(false);
+  const [rejectionReason, setRejectionReason] = useState("");
+  const [processingAction, setProcessingAction] = useState(false);
+  const [stockCheckResult, setStockCheckResult] = useState<{
+    isValid: boolean;
+    message: string;
+    insufficientItems?: {
+      productId: number;
+      title: string;
+      available: number;
+      required: number;
+    }[];
+  } | null>(null);
 
-  // Load orders on component mount and when page, search, or status filter changes
   useEffect(() => {
     fetchOrders();
-  }, [page, searchTerm, statusFilter]);
+  }, [page, statusFilter]);
 
-  // Fetch orders from API
   const fetchOrders = async () => {
     try {
       setLoading(true);
@@ -74,110 +84,228 @@ const OrderManagementPage: React.FC = () => {
 
       const response = await orderService.getOrders({
         page,
-        limit: 10,
+        limit: ITEMS_PER_PAGE,
         search: searchTerm,
-        status: statusFilter || undefined,
+        status: statusFilter ? (statusFilter as OrderStatus) : undefined,
       });
 
-      setOrders(response.data.data);
-      setTotalPages(Math.ceil(response.data.total / 10));
+      // Handle different response formats
+      if (Array.isArray(response.data)) {
+        setOrders(response.data);
+        setTotalPages(Math.ceil(response.data.length / ITEMS_PER_PAGE));
+      } else if (response.data && response.data.data) {
+        setOrders(response.data.data);
+        setTotalPages(Math.ceil(response.data.total / ITEMS_PER_PAGE));
+      } else {
+        setOrders([]);
+        setTotalPages(1);
+      }
     } catch (err: any) {
       console.error("Failed to fetch orders:", err);
       setError(err.response?.data?.message || "Failed to load orders");
+      setOrders([]);
     } finally {
       setLoading(false);
     }
   };
 
-  // Handle page change
-  const handlePageChange = (_: React.ChangeEvent<unknown>, value: number) => {
-    setPage(value);
-  };
-
-  // Handle search
   const handleSearch = () => {
-    setPage(1);
+    setPage(1); // Reset to first page when searching
     fetchOrders();
   };
 
-  // Handle status filter change
-  const handleStatusFilterChange = (
-    event: React.ChangeEvent<HTMLInputElement> | { target: { value: unknown } }
+  const handlePageChange = (
+    event: React.ChangeEvent<unknown>,
+    value: number
   ) => {
-    setStatusFilter(event.target.value as OrderStatus | "");
-    setPage(1);
+    setPage(value);
   };
 
-  // Open dialog to update order status
-  const handleStatusUpdateClick = (order: Order) => {
-    setSelectedOrder(order);
-    setNewStatus(order.status);
-    setOpenStatusDialog(true);
+  const handleStatusFilterChange = (
+    event: React.ChangeEvent<HTMLInputElement> | { target: { value: string } }
+  ) => {
+    setStatusFilter(event.target.value as string);
+    setPage(1); // Reset to first page when changing filters
   };
 
-  // Update order status
-  const handleStatusUpdateConfirm = async () => {
-    if (!selectedOrder) return;
-
-    try {
-      setStatusUpdateLoading(true);
-      await orderService.updateOrderStatus(selectedOrder.id, newStatus);
-
-      // Refresh order list
-      fetchOrders();
-
-      // Close dialog
-      setOpenStatusDialog(false);
-      setSelectedOrder(null);
-    } catch (err: any) {
-      console.error("Failed to update order status:", err);
-      setError(err.response?.data?.message || "Failed to update order status");
-    } finally {
-      setStatusUpdateLoading(false);
-    }
-  };
-
-  // View order details
-  const handleViewOrder = (orderId: string) => {
+  const handleViewOrder = (orderId: number) => {
     navigate(`/order/${orderId}`);
   };
 
-  // Approve order
-  const handleApproveOrder = async (order: Order) => {
+  // Check if all products in the order are in stock
+  const checkStock = async (order: Order) => {
     try {
-      await orderService.updateOrderStatus(order.id, OrderStatus.APPROVED);
-      fetchOrders();
-    } catch (err: any) {
-      console.error("Failed to approve order:", err);
-      setError(err.response?.data?.message || "Failed to approve order");
+      setProcessingAction(true);
+
+      // Get current stock levels for all products in the order
+      const stockCheckPromises = order.invoice.cart.items.map(async (item) => {
+        const response = await productService.getProductById(
+          item.product.id.toString()
+        );
+        const product = response.data;
+        return {
+          productId: item.product.id,
+          title: item.product.title,
+          available: product.quantity,
+          required: item.quantity,
+          isAvailable: product.quantity >= item.quantity,
+        };
+      });
+
+      const stockCheckResults = await Promise.all(stockCheckPromises);
+      const insufficientItems = stockCheckResults.filter(
+        (item) => !item.isAvailable
+      );
+
+      console.log("Stock check results:", stockCheckResults);
+
+      const isValid = insufficientItems.length === 0;
+
+      setStockCheckResult({
+        isValid,
+        message: isValid
+          ? "All items are in stock and available for this order."
+          : "Some items in this order are out of stock.",
+        insufficientItems: insufficientItems.map((item) => ({
+          productId: item.productId,
+          title: item.title,
+          available: item.available,
+          required: item.required,
+        })),
+      });
+
+      return isValid;
+    } catch (error) {
+      console.error("Error checking stock:", error);
+      setStockCheckResult({
+        isValid: false,
+        message: "Error checking stock availability.",
+      });
+      return false;
+    } finally {
+      setProcessingAction(false);
     }
   };
 
-  // Reject order
-  const handleRejectOrder = async (order: Order) => {
+  // Handle approving an order
+  const handleApproveOrder = async (order: Order) => {
+    setSelectedOrder(order);
+
+    // Check stock before approving
+    const stockAvailable = await checkStock(order);
+
+    if (stockAvailable) {
+      try {
+        setProcessingAction(true);
+        await orderService.updateOrderStatus(order.id, "APPROVED");
+
+        // Record the operation for audit
+        // await orderService.addOrderNote(
+        //   order.id,
+        //   "Order approved by product manager."
+        // );
+
+        // Update product stock quantities
+        for (const item of order.invoice.cart.items) {
+          await productService.updateStock(
+            item.product.id,
+            item.quantity,
+            "decrease"
+          );
+        }
+
+        const autoRejectResponse =
+          await orderService.autoRejectInsufficientStockOrders();
+
+        setStockCheckResult(null);
+        fetchOrders(); // Refresh the list
+      } catch (err: any) {
+        console.error("Failed to approve order:", err);
+        setError(err.response?.data?.message || "Failed to approve order");
+      } finally {
+        setProcessingAction(false);
+      }
+    }
+  };
+
+  // Open reject dialog
+  const handleOpenRejectDialog = (order: Order) => {
+    setSelectedOrder(order);
+    setRejectionReason("");
+    setOpenRejectDialog(true);
+  };
+
+  // Handle rejecting an order
+  const handleRejectOrder = async () => {
+    if (!selectedOrder) return;
+
     try {
-      await orderService.updateOrderStatus(order.id, OrderStatus.REJECTED);
-      fetchOrders();
+      setProcessingAction(true);
+      await orderService.updateOrderStatus(selectedOrder.id, "REJECTED");
+
+      // Save rejection reason
+      // await orderService.addOrderNote(
+      //   selectedOrder.id,
+      //   `Order rejected by product manager. Reason: ${rejectionReason}`
+      // );
+
+      setOpenRejectDialog(false);
+      setRejectionReason("");
+      setSelectedOrder(null);
+      fetchOrders(); // Refresh the list
     } catch (err: any) {
       console.error("Failed to reject order:", err);
       setError(err.response?.data?.message || "Failed to reject order");
+    } finally {
+      setProcessingAction(false);
     }
   };
 
-  // Ship order
-  const handleShipOrder = async (order: Order) => {
-    try {
-      await orderService.updateOrderStatus(order.id, OrderStatus.SHIPPED);
-      fetchOrders();
-    } catch (err: any) {
-      console.error("Failed to mark order as shipped:", err);
-      setError(
-        err.response?.data?.message || "Failed to mark order as shipped"
-      );
+  // Get status label
+  const getStatusLabel = (status: string) => {
+    switch (status) {
+      case "PENDING":
+        return "Pending";
+      case "APPROVED":
+        return "Approved";
+      case "SHIPPED":
+        return "Shipped";
+      case "DELIVERED":
+        return "Delivered";
+      case "REJECTED":
+        return "Rejected";
+      case "CANCELLED":
+        return "Cancelled";
+      default:
+        return status;
     }
   };
 
-  // Format price for display
+  // Get status color
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case "PENDING":
+        return "warning";
+      case "APPROVED":
+        return "success";
+      case "SHIPPED":
+        return "primary";
+      case "DELIVERED":
+        return "success";
+      case "REJECTED":
+      case "CANCELLED":
+        return "error";
+      default:
+        return "default";
+    }
+  };
+
+  // Format date
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleString();
+  };
+
+  // Format price
   const formatPrice = (price: number) => {
     return new Intl.NumberFormat("vi-VN", {
       style: "currency",
@@ -185,75 +313,11 @@ const OrderManagementPage: React.FC = () => {
     }).format(price);
   };
 
-  // Format date for display
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleString("en-US", {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  };
-
-  // Get status label
-  const getStatusLabel = (status: OrderStatus) => {
-    const labels = {
-      [OrderStatus.PENDING]: "Pending",
-      [OrderStatus.APPROVED]: "Approved",
-      [OrderStatus.REJECTED]: "Rejected",
-      [OrderStatus.SHIPPED]: "Shipped",
-      [OrderStatus.DELIVERED]: "Delivered",
-      [OrderStatus.CANCELLED]: "Cancelled",
-    };
-    return labels[status] || status;
-  };
-
-  // Get status color
-  const getStatusColor = (status: OrderStatus) => {
-    const colors = {
-      [OrderStatus.PENDING]: "warning",
-      [OrderStatus.APPROVED]: "info",
-      [OrderStatus.REJECTED]: "error",
-      [OrderStatus.SHIPPED]: "primary",
-      [OrderStatus.DELIVERED]: "success",
-      [OrderStatus.CANCELLED]: "error",
-    };
-    return colors[status] || "default";
-  };
-
-  // Get available status transitions based on current status
-  const getAvailableStatusTransitions = (currentStatus: OrderStatus) => {
-    switch (currentStatus) {
-      case OrderStatus.PENDING:
-        return [OrderStatus.APPROVED, OrderStatus.REJECTED];
-      case OrderStatus.APPROVED:
-        return [OrderStatus.SHIPPED, OrderStatus.CANCELLED];
-      case OrderStatus.SHIPPED:
-        return [OrderStatus.DELIVERED];
-      case OrderStatus.DELIVERED:
-        return [];
-      case OrderStatus.REJECTED:
-        return [];
-      case OrderStatus.CANCELLED:
-        return [];
-      default:
-        return [];
-    }
-  };
-
   return (
     <Container maxWidth="lg" sx={{ py: 4 }}>
-      <Box
-        sx={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          mb: 3,
-        }}
-      >
-        <Typography variant="h4">Order Management</Typography>
-      </Box>
+      <Typography variant="h4" gutterBottom>
+        Order Management
+      </Typography>
 
       {error && (
         <Alert severity="error" sx={{ mb: 3 }}>
@@ -271,139 +335,147 @@ const OrderManagementPage: React.FC = () => {
           }}
         >
           <TextField
-            placeholder="Search orders..."
+            placeholder="Search orders by ID, customer name, or email..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             onKeyPress={(e) => e.key === "Enter" && handleSearch()}
             sx={{ flexGrow: 1 }}
             InputProps={{
               startAdornment: (
-                <InputAdornment position="start">
-                  <SearchIcon />
-                </InputAdornment>
+                <SearchIcon sx={{ color: "action.active", mr: 1 }} />
               ),
             }}
           />
 
-          <FormControl sx={{ minWidth: 180 }}>
-            <InputLabel>Filter by Status</InputLabel>
-            <Select
-              value={statusFilter}
-              onChange={handleStatusFilterChange}
-              label="Filter by Status"
-            >
-              <MenuItem value="">All Statuses</MenuItem>
-              {Object.values(OrderStatus).map((status) => (
-                <MenuItem key={status} value={status}>
-                  {getStatusLabel(status)}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
+          <Button
+            startIcon={<FilterIcon />}
+            onClick={() => setFilterVisible(!filterVisible)}
+            variant="outlined"
+          >
+            Filters
+          </Button>
 
           <Button variant="outlined" onClick={handleSearch}>
             Search
           </Button>
         </Box>
 
-        {loading ? (
-          <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}>
-            <CircularProgress />
+        {filterVisible && (
+          <Box sx={{ mt: 2, mb: 2 }}>
+            <FormControl variant="outlined" sx={{ minWidth: 200 }}>
+              <InputLabel>Status</InputLabel>
+              <Select
+                value={statusFilter}
+                onChange={handleStatusFilterChange}
+                label="Status"
+              >
+                <MenuItem value="">All Statuses</MenuItem>
+                <MenuItem value="PENDING">Pending</MenuItem>
+                <MenuItem value="APPROVED">Approved</MenuItem>
+                <MenuItem value="SHIPPED">Shipped</MenuItem>
+                <MenuItem value="DELIVERED">Delivered</MenuItem>
+                <MenuItem value="REJECTED">Rejected</MenuItem>
+                <MenuItem value="CANCELLED">Cancelled</MenuItem>
+              </Select>
+            </FormControl>
           </Box>
-        ) : (
-          <>
-            {orders.length === 0 ? (
-              <Box sx={{ py: 4, textAlign: "center" }}>
-                <Typography variant="body1" color="text.secondary">
-                  No orders found.
-                </Typography>
-              </Box>
-            ) : (
-              <TableContainer>
-                <Table>
-                  <TableHead>
-                    <TableRow>
-                      <TableCell>Order ID</TableCell>
-                      <TableCell>Customer</TableCell>
-                      <TableCell>Date</TableCell>
-                      <TableCell>Status</TableCell>
-                      <TableCell>Items</TableCell>
-                      <TableCell>Total</TableCell>
-                      <TableCell align="right">Actions</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {orders.map((order) => (
-                      <TableRow key={order.id}>
-                        <TableCell>
-                          <Typography variant="body2" fontFamily="monospace">
-                            {order.id.substring(0, 8)}...
-                          </Typography>
-                        </TableCell>
-                        <TableCell>{order.customer.name}</TableCell>
-                        <TableCell>{formatDate(order.createdAt)}</TableCell>
-                        <TableCell>
-                          <Chip
-                            label={getStatusLabel(order.status)}
-                            color={getStatusColor(order.status) as any}
-                            size="small"
-                          />
-                        </TableCell>
-                        <TableCell>{order.items.length}</TableCell>
-                        <TableCell>{formatPrice(order.total)}</TableCell>
-                        <TableCell align="right">
-                          <IconButton
-                            color="primary"
-                            onClick={() => handleViewOrder(order.id)}
-                            title="View Order Details"
-                          >
-                            <VisibilityIcon />
-                          </IconButton>
+        )}
+      </Paper>
 
-                          <IconButton
-                            color="primary"
-                            onClick={() => handleStatusUpdateClick(order)}
-                            title="Update Status"
-                          >
-                            <EditIcon />
-                          </IconButton>
+      {loading ? (
+        <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}>
+          <CircularProgress />
+        </Box>
+      ) : (
+        <>
+          {!orders || orders.length === 0 ? (
+            <Box sx={{ py: 4, textAlign: "center" }}>
+              <Typography variant="body1" color="text.secondary">
+                No orders found matching your criteria.
+              </Typography>
+            </Box>
+          ) : (
+            <TableContainer component={Paper}>
+              <Table>
+                <TableHead>
+                  <TableRow>
+                    <TableCell>ID</TableCell>
+                    <TableCell>Date</TableCell>
+                    <TableCell>Customer</TableCell>
+                    <TableCell align="right">Total</TableCell>
+                    <TableCell>Status</TableCell>
+                    <TableCell align="center">Actions</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {orders.map((order) => (
+                    <TableRow key={order.id}>
+                      <TableCell>{order.id}</TableCell>
+                      <TableCell>
+                        {formatDate(order.transaction.payDate)}
+                      </TableCell>
+                      <TableCell>
+                        {order.deliveryInfo.recipientName}
+                        <Typography variant="body2" color="text.secondary">
+                          {order.deliveryInfo.email}
+                        </Typography>
+                      </TableCell>
+                      <TableCell align="right">
+                        {formatPrice(order.invoice.totalAmount)}
+                      </TableCell>
+                      <TableCell>
+                        <Chip
+                          label={getStatusLabel(order.status)}
+                          color={getStatusColor(order.status) as any}
+                          size="small"
+                        />
+                      </TableCell>
+                      <TableCell align="center">
+                        <Box sx={{ display: "flex", justifyContent: "center" }}>
+                          <Tooltip title="View Order Details">
+                            <IconButton
+                              size="small"
+                              onClick={() => handleViewOrder(order.id)}
+                            >
+                              <ViewIcon />
+                            </IconButton>
+                          </Tooltip>
 
-                          {order.status === OrderStatus.PENDING && (
+                          {order.status === "PENDING" && (
                             <>
-                              <IconButton
-                                color="success"
-                                onClick={() => handleApproveOrder(order)}
-                                title="Approve Order"
-                              >
-                                <CheckIcon />
-                              </IconButton>
-                              <IconButton
-                                color="error"
-                                onClick={() => handleRejectOrder(order)}
-                                title="Reject Order"
-                              >
-                                <CancelIcon />
-                              </IconButton>
+                              <Tooltip title="Approve Order">
+                                <IconButton
+                                  size="small"
+                                  color="success"
+                                  onClick={() => handleApproveOrder(order)}
+                                  disabled={processingAction}
+                                >
+                                  <ApproveIcon />
+                                </IconButton>
+                              </Tooltip>
+
+                              <Tooltip title="Reject Order">
+                                <IconButton
+                                  size="small"
+                                  color="error"
+                                  onClick={() => handleOpenRejectDialog(order)}
+                                  disabled={processingAction}
+                                >
+                                  <RejectIcon />
+                                </IconButton>
+                              </Tooltip>
                             </>
                           )}
+                        </Box>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          )}
 
-                          {order.status === OrderStatus.APPROVED && (
-                            <IconButton
-                              color="primary"
-                              onClick={() => handleShipOrder(order)}
-                              title="Mark as Shipped"
-                            >
-                              <ShippingIcon />
-                            </IconButton>
-                          )}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-            )}
-
+          {totalPages > 1 && (
             <Box sx={{ display: "flex", justifyContent: "center", mt: 3 }}>
               <Pagination
                 count={totalPages}
@@ -412,61 +484,127 @@ const OrderManagementPage: React.FC = () => {
                 color="primary"
               />
             </Box>
-          </>
-        )}
-      </Paper>
+          )}
+        </>
+      )}
 
-      {/* Status Update Dialog */}
+      {/* Stock check result alert */}
       <Dialog
-        open={openStatusDialog}
-        onClose={() => setOpenStatusDialog(false)}
+        open={!!stockCheckResult}
+        onClose={() => setStockCheckResult(null)}
       >
-        <DialogTitle>Update Order Status</DialogTitle>
+        <DialogTitle>
+          {stockCheckResult?.isValid
+            ? "Stock Check Passed"
+            : "Stock Check Failed"}
+        </DialogTitle>
         <DialogContent>
-          <DialogContentText sx={{ mb: 2 }}>
-            Change the status for order ID: {selectedOrder?.id}
-          </DialogContentText>
+          <Typography variant="body1" gutterBottom>
+            {stockCheckResult?.message}
+          </Typography>
 
-          <FormControl fullWidth sx={{ mt: 1 }}>
-            <InputLabel>New Status</InputLabel>
-            <Select
-              value={newStatus}
-              onChange={(e) => setNewStatus(e.target.value as OrderStatus)}
-              label="New Status"
-            >
-              {selectedOrder &&
-                [
-                  selectedOrder.status,
-                  ...getAvailableStatusTransitions(selectedOrder.status),
-                ].map((status) => (
-                  <MenuItem key={status} value={status}>
-                    {getStatusLabel(status)}
-                  </MenuItem>
-                ))}
-            </Select>
-          </FormControl>
+          {stockCheckResult?.insufficientItems &&
+            stockCheckResult.insufficientItems.length > 0 && (
+              <>
+                <Typography variant="subtitle1" sx={{ mt: 2, mb: 1 }}>
+                  Out of stock items:
+                </Typography>
+                <TableContainer component={Paper} variant="outlined">
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>Product</TableCell>
+                        <TableCell align="right">Required</TableCell>
+                        <TableCell align="right">In Stock</TableCell>
+                        <TableCell align="right">Shortage</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {stockCheckResult.insufficientItems.map((item) => (
+                        <TableRow key={item.productId}>
+                          <TableCell>{item.title}</TableCell>
+                          <TableCell align="right">{item.required}</TableCell>
+                          <TableCell align="right">{item.available}</TableCell>
+                          <TableCell align="right" sx={{ color: "error.main" }}>
+                            {item.required - item.available}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              </>
+            )}
         </DialogContent>
         <DialogActions>
+          {stockCheckResult?.isValid ? (
+            <>
+              <Button onClick={() => setStockCheckResult(null)}>Cancel</Button>
+              <Button
+                onClick={() => {
+                  setStockCheckResult(null);
+                  if (selectedOrder) {
+                    handleApproveOrder(selectedOrder);
+                  }
+                }}
+                variant="contained"
+                color="success"
+              >
+                Confirm Approval
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button onClick={() => setStockCheckResult(null)}>Close</Button>
+              <Button
+                onClick={() => {
+                  setStockCheckResult(null);
+                  if (selectedOrder) {
+                    handleOpenRejectDialog(selectedOrder);
+                  }
+                }}
+                variant="contained"
+                color="error"
+              >
+                Reject Order
+              </Button>
+            </>
+          )}
+        </DialogActions>
+      </Dialog>
+
+      {/* Rejection dialog */}
+      <Dialog
+        open={openRejectDialog}
+        onClose={() => setOpenRejectDialog(false)}
+      >
+        <DialogTitle>Reject Order</DialogTitle>
+        <DialogContent>
+          <Typography variant="body1" gutterBottom>
+            Please provide a reason for rejecting this order:
+          </Typography>
+          <TextField
+            autoFocus
+            margin="dense"
+            id="rejection-reason"
+            label="Rejection Reason"
+            fullWidth
+            multiline
+            rows={4}
+            value={rejectionReason}
+            onChange={(e) => setRejectionReason(e.target.value)}
+            placeholder="e.g., Item out of stock, Unable to deliver to this location, etc."
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setOpenRejectDialog(false)}>Cancel</Button>
           <Button
-            onClick={() => setOpenStatusDialog(false)}
-            disabled={statusUpdateLoading}
-          >
-            Cancel
-          </Button>
-          <Button
-            onClick={handleStatusUpdateConfirm}
-            color="primary"
-            disabled={
-              statusUpdateLoading ||
-              (selectedOrder ? newStatus === selectedOrder.status : false)
-            }
+            onClick={handleRejectOrder}
             variant="contained"
+            color="error"
+            disabled={!rejectionReason.trim() || processingAction}
           >
-            {statusUpdateLoading ? (
-              <CircularProgress size={24} />
-            ) : (
-              "Update Status"
-            )}
+            {processingAction ? <CircularProgress size={24} /> : "Reject Order"}
           </Button>
         </DialogActions>
       </Dialog>

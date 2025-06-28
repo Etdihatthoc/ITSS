@@ -1,11 +1,7 @@
 package com.hust.ict.aims.service;
-import com.hust.ict.aims.dto.CartItemRequestDTO;
-import com.hust.ict.aims.dto.CartItemsRequest;
-import com.hust.ict.aims.dto.CartRequest;
+import com.hust.ict.aims.dto.*;
 import com.hust.ict.aims.model.Cart;
 import com.hust.ict.aims.model.CartItem;
-import org.springframework.http.ResponseEntity;
-import org.springframework.stereotype.Service;
 
 // ------------------------------------------------------------
 // COHESION COMMENT:
@@ -20,6 +16,8 @@ import org.springframework.stereotype.Service;
 import java.util.List;
 import java.util.Map;
 public interface CartService {
+    CartCalculationResponseDTO calculateCartTotals(CartCalculationRequestDTO request);
+    CartCalculationResponseDTO calculateRushCartTotals(CartCalculationRequestDTO request);
     Cart emptyCart(Long cartId);
     Cart save(Cart cart);
     Cart findById(Long id);
@@ -38,5 +36,5 @@ public interface CartService {
     float calculateTotalBeforeVAT(Cart cart);
     Cart updateItemQuanity(Long cartId, Long productId, Integer newQuantity);
     Map<String, Object> checkInventoryForCart(Long cartId);
-    Cart createCartSnapshot(CartRequest cartData);
+    Cart createCartSnapshot(CartRequestDTO cartData);
 }

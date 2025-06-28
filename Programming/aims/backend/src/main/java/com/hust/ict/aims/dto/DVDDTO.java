@@ -17,6 +17,7 @@ public class DVDDTO extends ProductDTO {
     private String runtime;
     private String discType;
     private String director;
+    private String genre;
 
     public static @NotNull DVDDTO fromEntity(DVD dvd) {
         DVDDTO dto = new DVDDTO();
@@ -28,6 +29,7 @@ public class DVDDTO extends ProductDTO {
         dto.setRuntime(dvd.getRuntime());
         dto.setDiscType(dvd.getDiscType());
         dto.setDirector(dvd.getDirector());
+        dto.setGenre(dvd.getGenre());
         return dto;
     }
 }

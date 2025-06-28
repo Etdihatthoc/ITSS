@@ -1,6 +1,7 @@
 // src/services/orderService.ts
 import axios from "axios";
 import { Order, OrderStatus } from "../types/order";
+import api from "./api";
 
 // Define the base API URL
 const API_URL = "http://localhost:8080/api";
@@ -92,9 +93,9 @@ const orderService = {
    * @param status New status
    * @returns Promise with updated order
    */
-  updateOrderStatus: async (id: string, status: string) => {
+  updateOrderStatus: async (id: number, status: string) => {
     return axios.patch<Order>(
-      `${API_URL}/orders/${id}/status`,
+      `${API_URL}/orders/${id}/status `,
       { status },
       {
         headers: {
@@ -193,6 +194,12 @@ const orderService = {
           "Content-Type": "application/json",
         },
       }
+    );
+  },
+
+  autoRejectInsufficientStockOrders: async () => {
+    return api.post<{ rejectedOrderIds: number[]; count: number }>(
+      `/orders/auto-reject-insufficient-stock`
     );
   },
 };

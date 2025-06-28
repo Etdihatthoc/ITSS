@@ -7,7 +7,6 @@ import org.apache.commons.logging.LogFactory;
 
 @SpringBootApplication
 public class AimsApplication {
-
 	public static void main(String[] args) {
 		SpringApplication.run(AimsApplication.class, args);
 	}

@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonSubTypes;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import com.hust.ict.aims.model.*;
 import lombok.Data;
+
 import java.time.LocalDate;
 
 @JsonTypeInfo(
@@ -33,7 +34,6 @@ public class ProductDTO {
     private String barcode;
     private String productDescription;
     private int quantity;
-    private String genre;
 
     /**
      * Map các trường chung từ thực thể Product sang DTO
@@ -53,7 +53,6 @@ public class ProductDTO {
         dto.setBarcode(product.getBarcode());
         dto.setProductDescription(product.getProductDescription());
         dto.setQuantity(product.getQuantity());
-        dto.setGenre(product.getGenre());
     }
 
     /**

@@ -1,4 +1,3 @@
-// src/pages/checkout/PaymentPage.tsx
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import {
@@ -18,38 +17,114 @@ import {
   FormControl,
 } from "@mui/material";
 import { useCart } from "../../contexts/CartContext";
+import cartService from "../../services/cartService"; // Import cartService
 
 interface DeliveryInfo {
   recipientName: string;
   email: string;
   phone: string;
   province: string;
-  address: string;
+  deliveryAddress: string;
   isRushOrder: boolean;
   rushDeliveryTime?: string;
   rushDeliveryInstructions?: string;
   deliveryFee: number;
 }
 
+interface PaymentSummary {
+  subtotal: number;
+  tax: number;
+  deliveryFee: number;
+  total: number;
+}
+
 const PaymentPage: React.FC = () => {
   const navigate = useNavigate();
-  const { cart, clearCart } = useCart();
+  const { cart } = useCart();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [deliveryInfo, setDeliveryInfo] = useState<DeliveryInfo | null>(null);
   const [paymentMethod, setPaymentMethod] = useState("credit_card");
+  const [paymentSummary, setPaymentSummary] = useState<PaymentSummary | null>(
+    null
+  );
+  const [calculatingPayment, setCalculatingPayment] = useState(false);
 
+  // Fetch delivery info and calculate payment when component loads
   useEffect(() => {
-    // Retrieve delivery info from session storage
-    const storedDeliveryInfo = sessionStorage.getItem("deliveryInfo");
+    // Retrieve delivery info from localStorage
+    const storedDeliveryInfo = localStorage.getItem("deliveryInfo");
 
     if (!storedDeliveryInfo) {
       navigate("/checkout/delivery");
       return;
     }
 
-    setDeliveryInfo(JSON.parse(storedDeliveryInfo));
+    const parsedDeliveryInfo = JSON.parse(storedDeliveryInfo);
+    setDeliveryInfo(parsedDeliveryInfo);
+
+    // Calculate payment summary with backend once we have delivery info
+    calculatePaymentSummary(parsedDeliveryInfo);
   }, [navigate]);
+
+  // Function to calculate payment summary using backend API
+  const calculatePaymentSummary = async (deliveryInfo: DeliveryInfo) => {
+    if (!cart || !cart.items || cart.items.length === 0) {
+      return;
+    }
+
+    setCalculatingPayment(true);
+    try {
+      // Map cart items to the format expected by the API
+      const cartItems = cart.items.map((item) => ({
+        productId: item.product.id,
+        quantity: item.quantity,
+      }));
+
+      // Call the backend API with cart items, rush delivery status, and province
+      const result = await cartService.calculateCart(
+        cartItems,
+        deliveryInfo.isRushOrder,
+        deliveryInfo.province
+      );
+
+      // Set payment summary from the API response
+      setPaymentSummary({
+        subtotal: result.subtotal,
+        tax: result.tax,
+        deliveryFee: result.deliveryFee,
+        total: result.total,
+      });
+
+      // Store invoice data for later use
+      localStorage.setItem(
+        "invoiceData",
+        JSON.stringify({
+          totalProductPriceBeforeVAT: result.subtotal,
+          totalProductPriceAfterVAT: result.subtotal + result.tax,
+          deliveryFee: result.deliveryFee,
+          totalAmount: result.total,
+        })
+      );
+    } catch (error) {
+      console.error("Failed to calculate payment summary:", error);
+      setError("Failed to calculate payment details. Please try again.");
+
+      // Fallback to simple calculation if API fails
+      const subtotal = cart.subtotal || 0;
+      const tax = subtotal * 0.1;
+      const deliveryFee = deliveryInfo.deliveryFee || 0;
+
+      setPaymentSummary({
+        subtotal,
+        tax,
+        deliveryFee,
+        total: subtotal + tax + deliveryFee,
+      });
+    } finally {
+      setCalculatingPayment(false);
+    }
+  };
 
   const handlePaymentMethodChange = (
     event: React.ChangeEvent<HTMLInputElement>
@@ -62,87 +137,82 @@ const PaymentPage: React.FC = () => {
       setLoading(true);
       setError("");
 
-      // Get stored information from localStorage
-      const deliveryInfo = JSON.parse(
-        localStorage.getItem("deliveryInfo") || "{}"
-      );
-      const invoiceData = JSON.parse(
-        localStorage.getItem("invoiceData") || "{}"
-      );
+      if (!cart || !cart.items.length || !deliveryInfo) {
+        setError("Missing cart or delivery information");
+        return;
+      }
 
-      // Create transaction data
-      const transactionData = {
-        transactionId: `TXN${Date.now()}`,
-        bankCode: "VNPAY",
-        amount: calculateTotal(),
-        cardType: paymentMethod,
-        payDate: new Date().toISOString(),
-        errorMessage: "",
-      };
+      // Calculate final payment amount at payment time (not using stored values)
+      const cartItems = cart.items.map((item) => ({
+        productId: item.product.id,
+        quantity: item.quantity,
+      }));
 
-      // Store transaction in localStorage
-      localStorage.setItem("transactionData", JSON.stringify(transactionData));
+      try {
+        // Re-calculate totals at payment time to prevent manipulation
+        const finalCalculation = await cartService.calculateCart(
+          cartItems,
+          deliveryInfo.isRushOrder,
+          deliveryInfo.province
+        );
 
-      // Create order data (but don't submit to API yet)
-      const orderData = {
-        transaction: transactionData,
-        invoice: invoiceData,
-        deliveryInfo: deliveryInfo,
-        status: "PENDING",
-      };
+        // Create transaction data with the freshly calculated amount
+        const transactionData = {
+          transactionId: `TXN${Date.now()}`,
+          bankCode: "VNPAY",
+          amount: finalCalculation.total,
+          cardType: paymentMethod,
+          payDate: new Date().toISOString(),
+          errorMessage: "",
+        };
 
-      // Store temporary order in localStorage
-      const tempOrderId = `order_${Date.now()}`;
-      localStorage.setItem(
-        "orderData",
-        JSON.stringify({ ...orderData, id: tempOrderId })
-      );
+        // Store transaction in localStorage
+        localStorage.setItem(
+          "transactionData",
+          JSON.stringify(transactionData)
+        );
 
-      // For demonstration, we'll use the temp order ID
-      // In a real implementation, you'd get this from your payment gateway
+        // Create order data with fresh calculation
+        const orderData = {
+          transaction: transactionData,
+          invoice: {
+            totalProductPriceBeforeVAT: finalCalculation.subtotal,
+            totalProductPriceAfterVAT:
+              finalCalculation.subtotal + finalCalculation.tax,
+            deliveryFee: finalCalculation.deliveryFee,
+            totalAmount: finalCalculation.total,
+            cart: cart,
+          },
+          deliveryInfo: deliveryInfo,
+          status: "PENDING",
+        };
 
-      // Navigate to confirmation page
-      // Redirect to backend /pay endpoint with required parameters
-      const amount = Math.round(parseInt(invoiceData.totalAmount));
+        // Store temporary order in localStorage
+        const tempOrderId = `order_${Date.now()}`;
+        localStorage.setItem(
+          "orderData",
+          JSON.stringify({ ...orderData, id: tempOrderId })
+        );
 
-      const params = new URLSearchParams({
-        gateway: "vnpay",
-        amount: amount.toString(),
-        orderId: Date.now().toString(),
-        orderInfo: 'Thanh toan hoa don',
-      });
-      window.location.href = `http://localhost:8080/api/pay_test?${params.toString()}`;
-      console.log("Redirecting to payment gateway with params:", params.toString());
-      // navigate(
-      //   `/checkout/confirmation?orderId=${tempOrderId}&status=success&transactionId=${transactionData.transactionId}`
-      // );
-      // Don't remove storage yet - we'll need it for the confirmation page
-      // localStorage.removeItem("deliveryInfo");
-      // localStorage.removeItem("invoiceData");
-      // localStorage.removeItem("transactionData");
-      // localStorage.removeItem("orderData");
+        // Pass the orderId to the backend so it can validate the amount later
+        const amount = Math.round(finalCalculation.total);
+        const params = new URLSearchParams({
+          gateway: "vnpay",
+          amount: amount.toString(),
+          orderId: tempOrderId,
+        });
+
+        window.location.href = `http://localhost:8080/api/pay_test?${params.toString()}`;
+      } catch (calculationError) {
+        console.error("Payment calculation failed:", calculationError);
+        setError("Failed to calculate final payment amount. Please try again.");
+      }
     } catch (error) {
       console.error("Payment processing failed:", error);
       setError("Failed to process payment. Please try again.");
     } finally {
       setLoading(false);
     }
-  };
-
-  const calculateSubtotal = () => {
-    return cart?.subtotal || 0;
-  };
-
-  const calculateTax = () => {
-    return calculateSubtotal() * 0.1; // 10% tax
-  };
-
-  const calculateDeliveryFee = () => {
-    return deliveryInfo?.deliveryFee || 0;
-  };
-
-  const calculateTotal = () => {
-    return calculateSubtotal() + calculateTax() + calculateDeliveryFee();
   };
 
   const formatPrice = (price: number) => {
@@ -152,7 +222,9 @@ const PaymentPage: React.FC = () => {
     }).format(price);
   };
 
-  if (!cart || !deliveryInfo) {
+  const isPageLoading = !cart || !deliveryInfo || calculatingPayment;
+
+  if (isPageLoading) {
     return (
       <Container sx={{ py: 4, textAlign: "center" }}>
         <CircularProgress />
@@ -179,8 +251,10 @@ const PaymentPage: React.FC = () => {
           gap: 4,
         }}
       >
-        {/* Payment Details - Left Column */}
+        {/* Order Details & Delivery Info - Left Column (unchanged) */}
         <Box sx={{ flex: { xs: "1 1 100%", md: "0 0 60%" } }}>
+          {/* Your existing order details and delivery info code */}
+          {/* No changes needed here */}
           <Paper sx={{ p: 3, mb: 3 }}>
             <Typography variant="h6" gutterBottom>
               Order Details
@@ -218,6 +292,7 @@ const PaymentPage: React.FC = () => {
             </List>
           </Paper>
 
+          {/* Delivery Information */}
           <Paper sx={{ p: 3, mb: 3 }}>
             <Typography variant="h6" gutterBottom>
               Delivery Information
@@ -250,7 +325,7 @@ const PaymentPage: React.FC = () => {
                   Delivery Address
                 </Typography>
                 <Typography variant="body1" gutterBottom>
-                  {deliveryInfo.address}, {deliveryInfo.province}
+                  {deliveryInfo.deliveryAddress}, {deliveryInfo.province}
                 </Typography>
               </Box>
 
@@ -274,6 +349,7 @@ const PaymentPage: React.FC = () => {
             </Box>
           </Paper>
 
+          {/* Payment Method */}
           <Paper sx={{ p: 3 }}>
             <Typography variant="h6" gutterBottom>
               Payment Method
@@ -324,7 +400,7 @@ const PaymentPage: React.FC = () => {
             >
               <Typography variant="body1">Subtotal:</Typography>
               <Typography variant="body1">
-                {formatPrice(calculateSubtotal())}
+                {formatPrice(paymentSummary?.subtotal || 0)}
               </Typography>
             </Box>
 
@@ -333,7 +409,7 @@ const PaymentPage: React.FC = () => {
             >
               <Typography variant="body1">VAT (10%):</Typography>
               <Typography variant="body1">
-                {formatPrice(calculateTax())}
+                {formatPrice(paymentSummary?.tax || 0)}
               </Typography>
             </Box>
 
@@ -342,7 +418,7 @@ const PaymentPage: React.FC = () => {
             >
               <Typography variant="body1">Delivery Fee:</Typography>
               <Typography variant="body1">
-                {formatPrice(calculateDeliveryFee())}
+                {formatPrice(paymentSummary?.deliveryFee || 0)}
               </Typography>
             </Box>
 
@@ -353,7 +429,7 @@ const PaymentPage: React.FC = () => {
             >
               <Typography variant="h6">Total:</Typography>
               <Typography variant="h6">
-                {formatPrice(calculateTotal())}
+                {formatPrice(paymentSummary?.total || 0)}
               </Typography>
             </Box>
 

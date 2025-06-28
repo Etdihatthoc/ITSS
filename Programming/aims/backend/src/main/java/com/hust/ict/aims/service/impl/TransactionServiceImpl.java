@@ -24,13 +24,47 @@ public class TransactionServiceImpl implements TransactionService {
     }
 
     @Override
+    public Transaction createTransaction(Transaction transaction) {
+        return transactionRepository.save(transaction);
+    }
+
+    @Override
+    public Transaction getTransaction(TransactionRequest transactionData) {
+        System.out.println(transactionData.getTransactionNo());
+        System.out.println(transactionData.getTransactionStatus());
+        System.out.println(transactionData.getAmount());
+        System.out.println(transactionData.getGateway());
+        System.out.println(transactionData.getPayDate());
+        System.out.println(transactionData.getAdditionalParams());
+//        Transaction transaction = new Transaction();
+//        transaction.setTransactionId(transaction.getTransactionId());
+//        transaction.setTransactionNo(transactionData.getTransactionNo());
+//        transaction.setGateway(transactionData.getGateway());
+//        transaction.setAmount(transactionData.getAmount());
+//        transaction.setTransactionStatus(transactionData.getTransactionStatus());
+//        transaction.setAdditionalParams(transactionData.getAdditionalParams());
+//
+//        // Parse payDate from string to appropriate date format
+//        try {
+//            // Parse date from ISO format (YYYY-MM-DD)
+//            LocalDateTime payDate = LocalDateTime.parse(transactionData.getPayDate());
+//            transaction.setPayDate(payDate);
+//        } catch (Exception e) {
+//            transaction.setPayDate(LocalDateTime.parse(new Date().toString())); // Default to current date if parsing fails
+//        }
+//        return transaction;
+        return findById(Integer.parseInt(transactionData.getTransactionId()));
+    }
+
+    @Override
     public Transaction createTransaction(TransactionRequest transactionData) {
         Transaction transaction = new Transaction();
-        transaction.setTransactionNo(transactionData.getTransactionId());
-        transaction.setBankCode(transactionData.getBankCode());
+        transaction.setTransactionId(transaction.getTransactionId());
+        transaction.setTransactionNo(transactionData.getTransactionNo());
+        transaction.setGateway(transactionData.getGateway());
         transaction.setAmount(transactionData.getAmount());
-        transaction.setBankTransactionNo(transactionData.getTransactionId()); // You may want to modify this
-        transaction.setCardType(transactionData.getCardType());
+        transaction.setTransactionStatus(transactionData.getTransactionStatus());
+        transaction.setAdditionalParams(transactionData.getAdditionalParams());
 
         // Parse payDate from string to appropriate date format
         try {
@@ -40,8 +74,6 @@ public class TransactionServiceImpl implements TransactionService {
         } catch (Exception e) {
             transaction.setPayDate(LocalDateTime.parse(new Date().toString())); // Default to current date if parsing fails
         }
-
-        transaction.setErrorMessage(transactionData.getErrorMessage());
 
         return transactionRepository.save(transaction);
     }

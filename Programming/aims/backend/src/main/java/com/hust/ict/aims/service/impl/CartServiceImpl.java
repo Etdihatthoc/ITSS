@@ -1,9 +1,6 @@
 package com.hust.ict.aims.service.impl;
 
-import com.hust.ict.aims.dto.CartItemRequest;
-import com.hust.ict.aims.dto.CartItemRequestDTO;
-import com.hust.ict.aims.dto.CartRequest;
-import com.hust.ict.aims.dto.InsufficientStockDTO;
+import com.hust.ict.aims.dto.*;
 import com.hust.ict.aims.model.Cart;
 import com.hust.ict.aims.model.CartItem;
 import com.hust.ict.aims.model.Product;
@@ -13,8 +10,6 @@ import com.hust.ict.aims.repository.ProductRepository;
 import com.hust.ict.aims.service.CartService;
 import jakarta.transaction.Transactional;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
@@ -28,8 +23,228 @@ public class CartServiceImpl implements CartService {
     private final ProductRepository productRepository;
 
     @Override
+    public CartCalculationResponseDTO calculateCartTotals(CartCalculationRequestDTO request) {
+        CartCalculationResponseDTO response = new CartCalculationResponseDTO();
+        List<CartItemDetailDTO> itemDetails = new ArrayList<>();
+        List<InsufficientStockDTO> outOfStockItems = new ArrayList<>();
+        boolean allItemsAvailable = true;
+        double subtotal = 0;
+        double heaviestItemWeight = 0;
+
+        // Process each item
+        for (CartItemDTO item : request.getItems()) {
+            Product product = productRepository.findById(item.getProductId())
+                    .orElseThrow(() -> new RuntimeException("Product not found: " + item.getProductId()));
+
+
+            // Calculate item subtotal
+            double itemSubtotal = product.getCurrentPrice() * item.getQuantity();
+            subtotal += itemSubtotal;
+
+            // Track heaviest item weight for shipping calculation
+            if (product.getWeight() > heaviestItemWeight) {
+                heaviestItemWeight = product.getWeight();
+            }
+
+            // Add to item details
+            CartItemDetailDTO itemDetail = new CartItemDetailDTO();
+            itemDetail.setProductId(product.getId());
+            itemDetail.setTitle(product.getTitle());
+            itemDetail.setPrice(product.getCurrentPrice());
+            itemDetail.setQuantity(item.getQuantity());
+            itemDetail.setSubtotal(itemSubtotal);
+            itemDetail.setImageURL(product.getImageURL());
+            itemDetail.setCategory(product.getCategory());
+            itemDetail.setWeight(product.getWeight());
+
+            itemDetails.add(itemDetail);
+        }
+
+        // Calculate VAT (10%)
+        double tax = subtotal * 0.1;
+
+        // Calculate delivery fee based on new rules
+        double deliveryFee = calculateDeliveryFee(subtotal, request.isRushDelivery(),
+                request.getProvince(), heaviestItemWeight);
+
+        // Calculate total
+        double total = subtotal + tax + deliveryFee;
+
+        // Set response values
+        response.setSubtotal(subtotal);
+        response.setTax(tax);
+        response.setDeliveryFee(deliveryFee);
+        response.setTotal(total);
+        response.setItems(itemDetails);
+        response.setAllItemsAvailable(allItemsAvailable);
+        response.setOutOfStockItems(outOfStockItems);
+
+        return response;
+    }
+
+    @Override
+    public CartCalculationResponseDTO calculateRushCartTotals(CartCalculationRequestDTO request) {
+        CartCalculationResponseDTO response = new CartCalculationResponseDTO();
+        boolean isAllItemsAvailable = true;
+        double subtotal = 0;
+        double normalSubtotal = 0;
+        double rushSubtotal = 0;
+        double normalHeaviestItemWeight = 0;
+        double rushHeaviestItemWeight = 0;
+        int rushItemCount = 0;
+        List<InsufficientStockDTO> outOfStockItems = new ArrayList<>();
+        List<CartItemDetailDTO> itemDetails = new ArrayList<>();
+        Map<Long, Integer> items = new HashMap<>();
+
+        for(CartItemDTO item : request.getItems()) {
+            items.put(item.getProductId(), item.getQuantity());
+        }
+
+        List<Product> products = productRepository.findByIdIn(items.keySet());
+
+        for(Product product: products) {
+            long productId = product.getId();
+
+            if(!items.containsKey(productId)) {
+                throw new RuntimeException("Product not found: " + product.getId());
+            }
+
+            if(product.getQuantity() < items.get(productId)) {
+                isAllItemsAvailable = false;
+                InsufficientStockDTO outOfStockItem = new InsufficientStockDTO(productId, product.getTitle(), items.get(productId), product.getQuantity());
+                outOfStockItems.add(outOfStockItem);
+                continue;
+            }
+
+            double basePrice = product.getCurrentPrice();
+            double adjustedPrice = product.isRushOrderEligible() ? basePrice + 10000 : basePrice;
+            double itemSubtotal = adjustedPrice * items.get(productId);
+
+            CartItemDetailDTO itemDetail = new CartItemDetailDTO();
+            itemDetail.setProductId(productId);
+            itemDetail.setTitle(product.getTitle());
+            itemDetail.setPrice(adjustedPrice);
+            itemDetail.setQuantity(items.get(productId));
+            itemDetail.setSubtotal(itemSubtotal);
+            itemDetail.setImageURL(product.getImageURL());
+            itemDetail.setCategory(product.getCategory());
+            itemDetail.setWeight(product.getWeight());
+
+            itemDetails.add(itemDetail);
+
+            if(product.isRushOrderEligible()) {
+                rushSubtotal += itemSubtotal;
+                rushItemCount++;
+                rushHeaviestItemWeight = Math.max(rushHeaviestItemWeight, product.getWeight());
+            } else {
+                normalSubtotal += itemSubtotal;
+                normalHeaviestItemWeight = Math.max(normalHeaviestItemWeight, product.getWeight());
+            }
+        }
+        subtotal = normalSubtotal + rushSubtotal;
+
+        double tax = subtotal * 0.1;
+
+        double normalDeliveryFee = normalSubtotal > 0 ? calculateDeliveryFee(normalSubtotal, false, request.getProvince(), normalHeaviestItemWeight) : 0;
+        double rushDeliveryFee = rushItemCount > 0 ? calculateDeliveryFee(rushSubtotal, true, request.getProvince(), rushHeaviestItemWeight) : 0;
+
+        double total = subtotal + tax + rushDeliveryFee;
+
+        response.setItems(itemDetails);
+        response.setSubtotal(subtotal);
+        response.setTax(tax);
+        response.setDeliveryFee(normalDeliveryFee);
+        response.setRushDeliveryFee(rushDeliveryFee);
+        response.setTotal(total);
+        response.setAllItemsAvailable(isAllItemsAvailable);
+        response.setOutOfStockItems(outOfStockItems);
+
+        return response;
+    }
+
+    /**
+     * Calculates delivery fee based on location, order value, item weight, and rush delivery status
+     *
+     * @param subtotal Total value of non-rush items
+     * @param isRushDelivery Whether this is a rush delivery
+     * @param province Customer province/city
+     * @param heaviestItemWeight Weight of the heaviest item in kg
+     * @return The calculated delivery fee
+     */
+    private double calculateDeliveryFee(double subtotal, boolean isRushDelivery,
+                                        String province, double heaviestItemWeight) {
+        // Base variables
+        double deliveryFee = 0;
+        boolean isInnerCity = isInnerCityLocation(province);
+
+        // Calculate base shipping fee based on location and weight
+        if (isInnerCity) {
+            // Inner Hanoi or HCMC: 22,000 VND for first 3kg
+            deliveryFee = 22000;
+
+            // Add 2,500 VND for each additional 0.5kg beyond 3kg
+            if (heaviestItemWeight > 3.0) {
+                double additionalWeight = heaviestItemWeight - 3.0;
+                int additionalHalfKilos = (int) Math.ceil(additionalWeight / 0.5);
+                deliveryFee += additionalHalfKilos * 2500;
+            }
+        } else {
+            // Elsewhere in Vietnam: 30,000 VND for first 0.5kg
+            deliveryFee = 30000;
+
+            // Add 2,500 VND for each additional 0.5kg beyond 0.5kg
+            if (heaviestItemWeight > 0.5) {
+                double additionalWeight = heaviestItemWeight - 0.5;
+                int additionalHalfKilos = (int) Math.ceil(additionalWeight / 0.5);
+                deliveryFee += additionalHalfKilos * 2500;
+            }
+        }
+
+        // Apply free shipping for orders over 100,000 VND (non-rush items only)
+        if (!isRushDelivery && subtotal >= 100000) {
+            // Free shipping up to 25,000 VND max
+            if (deliveryFee <= 25000) {
+                return 0; // Completely free
+            } else {
+                // Discount 25,000 VND from the delivery fee
+                return deliveryFee - 25000;
+            }
+        }
+
+        return deliveryFee;
+    }
+
+    /**
+     * Determines if a location is in inner Hanoi or HCMC
+     */
+    private boolean isInnerCityLocation(String province) {
+        if (province == null) {
+            return false;
+        }
+
+        String normalizedProvince = province.toLowerCase().trim();
+
+        // Check for inner Hanoi districts
+        boolean isInnerHanoi = normalizedProvince.contains("hanoi") ||
+                normalizedProvince.contains("hà nội");
+
+        // Check for inner HCMC districts
+        boolean isInnerHCMC = normalizedProvince.contains("ho chi minh") ||
+                normalizedProvince.contains("hồ chí minh") ||
+                normalizedProvince.contains("hcmc") ||
+                normalizedProvince.contains("saigon") ||
+                normalizedProvince.contains("sài gòn");
+
+        return isInnerHanoi || isInnerHCMC;
+
+        // Note: For a real implementation, you might want to check for specific inner districts
+        // rather than just the city name. This would require a more detailed database of
+        // districts and their classifications.
+    }
+
+    @Override
     @Transactional
-    public Cart createCartSnapshot(CartRequest cartData) {
+    public Cart createCartSnapshot(CartRequestDTO cartData) {
         // Create new cart
         Cart cart = new Cart();
         cart.setTotalProductPriceBeforeVAT(cartData.getTotalProductPriceBeforeVAT());
@@ -41,7 +256,7 @@ public class CartServiceImpl implements CartService {
         List<CartItem> cartItems = new ArrayList<>();
 
         if (cartData.getItems() != null) {
-            for (CartItemRequest itemRequest : cartData.getItems()) {
+            for (CartItemDTO itemRequest : cartData.getItems()) {
                 // Find product by ID
                 Optional<Product> productOpt = productRepository.findById(itemRequest.getProductId());
 

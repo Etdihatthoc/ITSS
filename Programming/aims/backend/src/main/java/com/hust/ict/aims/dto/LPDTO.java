@@ -13,6 +13,7 @@ public class LPDTO extends ProductDTO {
     private String recordLabel;
     private LocalDate releaseDate;
     private String tracklist;
+    private String genre;
 
     @org.jetbrains.annotations.NotNull
     public static LPDTO fromEntity(LP lp) {
@@ -23,6 +24,7 @@ public class LPDTO extends ProductDTO {
         dto.setRecordLabel(lp.getRecordLabel());
         dto.setReleaseDate(lp.getReleaseDate());
         dto.setTracklist(lp.getTracklist());
+        dto.setGenre(lp.getGenre());
         return dto;
     }
 }

@@ -14,6 +14,7 @@ public class BookDTO extends ProductDTO {
     private String language;
     private int numberOfPage;
     private LocalDate publicationDate;
+    private String genre;
 
     public static BookDTO fromEntity(Book book) {
         BookDTO dto = new BookDTO();
@@ -25,6 +26,7 @@ public class BookDTO extends ProductDTO {
         dto.setLanguage(book.getLanguage());
         dto.setNumberOfPage(book.getNumberOfPage());
         dto.setPublicationDate(book.getPublicationDate());
+        dto.setGenre(book.getGenre());
         return dto;
     }
 }

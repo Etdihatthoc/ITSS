@@ -1,10 +1,14 @@
 package com.hust.ict.aims.controller;
+
+import com.hust.ict.aims.dto.CartCalculationRequestDTO;
+import com.hust.ict.aims.dto.CartCalculationResponseDTO;
 import com.hust.ict.aims.dto.CartItemRequestDTO;
 import com.hust.ict.aims.model.Cart;
 import com.hust.ict.aims.service.CartService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+
 import java.util.List;
 import java.util.Map;
 
@@ -103,5 +107,16 @@ public class CartController {
         } catch (RuntimeException ex) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(ex.getMessage());
         }
+    }
+
+    @PostMapping("/calculate")
+    public ResponseEntity<CartCalculationResponseDTO> calculateCart(@RequestBody CartCalculationRequestDTO request) {
+        CartCalculationResponseDTO response;
+        if (request.isRushDelivery()) {
+            response = cartService.calculateRushCartTotals(request);
+        } else {
+            response = cartService.calculateCartTotals(request);
+        }
+        return ResponseEntity.ok(response);
     }
 }

@@ -34,6 +34,9 @@ public class Invoice {
     @Column(name = "deliveryfee", nullable = false)
     private float deliveryFee;
 
+    @Column(name = "rush_delivery_fee")
+    private float rushDeliveryFree;
+
     public Invoice() {}
 
     public Invoice(Cart cart, float totalProductPriceAfterVAT, float totalAmount, float deliveryFee) {
@@ -81,5 +84,13 @@ public class Invoice {
 
     public void setDeliveryFee(float deliveryFee) {
         this.deliveryFee = deliveryFee;
+    }
+
+    public float getRushDeliveryFree() {
+        return rushDeliveryFree;
+    }
+
+    public void setRushDeliveryFree(float rushDeliveryFree) {
+        this.rushDeliveryFree = rushDeliveryFree;
     }
 }

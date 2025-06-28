@@ -18,4 +18,11 @@ public interface OrderService {
     Orders findById(Long id);
     Orders save(Orders order);
     void deleteById(Long id);
+    Orders updateOrderStatus(Long id, String status);
+    /**
+     * Find and reject all pending orders that request products with insufficient stock
+     *
+     * @return List of order IDs that were auto-rejected
+     */
+    List<Long> rejectOrdersWithInsufficientStock();
 }

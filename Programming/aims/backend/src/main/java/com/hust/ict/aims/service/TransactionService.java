@@ -9,5 +9,7 @@ public interface TransactionService {
     Transaction findById(int id);
     Transaction save(Transaction transaction);
     void deleteById(int id);
+    Transaction getTransaction(TransactionRequest transactionData);
     Transaction createTransaction(TransactionRequest transactionData);
+    Transaction createTransaction(Transaction transaction);
 }
